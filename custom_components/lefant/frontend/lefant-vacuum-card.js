@@ -4,104 +4,571 @@
 // settings. Map layers, rooms and the ids of the robot entities come from the
 // `lefant/map` websocket command, so the card needs only the vacuum entity.
 
-const STATUS = {
-  standby: "In attesa",
-  smart: "Pulizia in corso",
-  zone_clean: "Pulizia zona",
-  part_clean: "Pulizia stanze",
-  cleaning: "Pulizia in corso",
-  paused: "In pausa",
-  goto_pos: "Verso il punto",
-  pos_arrived: "Punto raggiunto",
-  pos_unarrive: "Punto non raggiungibile",
-  goto_charge: "Rientro alla base",
-  charging: "In carica",
-  charge_done: "Carica completa",
-  sleep: "A riposo",
-  relocating: "Si sta localizzando",
-  relocating_recharge: "Cerca la base",
-  recharing_paused: "Rientro in pausa",
-  fastmaping: "Mappatura",
-  fastmaping_paused: "Mappatura in pausa",
-  dust_collection: "Svuota la polvere",
-  wash_mop: "Lava il mop",
-  goto_wash: "Va a lavare il mop",
-  wash_paused: "Lavaggio in pausa",
-  drying: "Asciuga il mop",
-  continuity_clear_charging: "Ricarica, poi riprende",
-  relocating_pause: "Localizzazione in pausa",
+export const STRINGS = {
+  en: {
+    locale: "en",
+    status: {
+      standby: "Standby",
+      smart: "Cleaning",
+      zone_clean: "Zone cleaning",
+      part_clean: "Room cleaning",
+      cleaning: "Cleaning",
+      paused: "Paused",
+      goto_pos: "Going to target",
+      pos_arrived: "Target reached",
+      pos_unarrive: "Target unreachable",
+      goto_charge: "Returning to dock",
+      charging: "Charging",
+      charge_done: "Charged",
+      sleep: "Sleeping",
+      relocating: "Relocating",
+      relocating_recharge: "Relocating to dock",
+      recharing_paused: "Return paused",
+      fastmaping: "Mapping",
+      fastmaping_paused: "Mapping paused",
+      dust_collection: "Emptying dust",
+      wash_mop: "Washing mop",
+      goto_wash: "Going to wash mop",
+      wash_paused: "Washing paused",
+      drying: "Drying mop",
+      continuity_clear_charging: "Charging to resume",
+      relocating_pause: "Relocating paused",
+    },
+    errors: {
+      side_brush: "Side brush",
+      main_brush: "Main brush",
+      left_wheel: "Left wheel",
+      right_wheel: "Right wheel",
+      dust_bin: "Dust bin",
+      cliff_sensor: "Cliff sensor",
+      bumper: "Bumper",
+      other: "Other",
+    },
+    suction: { closed: "Off", gentle: "Quiet", normal: "Standard", strong: "Strong", superstrong: "Max" },
+    water: { closed: "Off", low: "Low", middle: "Medium", high: "High" },
+    settings: {
+      title: "Settings",
+      carpet_boost: "Carpet boost",
+      carpet_boost_desc: "Raises suction when it detects a carpet",
+      carpet_detection: "Carpet detection",
+      carpet_detection_desc: "Detects carpets while cleaning",
+      resume: "Resume after charging",
+      resume_desc: "If the battery runs low, it charges and finishes the job",
+    },
+    base: { clean_water: "Clean water tank", dirty_water: "Dirty water tank", dust_bag: "Dust bag" },
+    parts: {
+      main_brush: "Main brush",
+      side_brush: "Side brush",
+      filter: "Filter",
+      mop: "Mop pads",
+      dust_bag: "Dust bag",
+      sensor: "Sensors",
+      replaced: "Replaced",
+      replaced_f: "Replaced",
+      cleaned: "Cleaned",
+    },
+    area: { nogo: "No-go", no_vacuum: "No vacuum", no_mop: "No mop" },
+    phase: {
+      cleaning: "Cleaning",
+      cleaning_in: "Cleaning: {room}",
+      zone: "Cleaning the zone",
+      goto_pos: "Going to the chosen point",
+      pos_arrived: "Point reached",
+      relocating: "Finding its position on the map",
+      mapping: "Drawing the map",
+      goto_wash: "Returning to the dock to wash the mop",
+      goto_wash_detail: "Then it resumes where it left off.",
+      wash_mop: "At the dock, washing the mop",
+      wash_mop_detail: "Takes about 2 minutes, then it resumes.",
+      docked: "At the dock, about to resume",
+      charging: "Charging, then it resumes",
+      dust: "Emptying dust into the dock",
+      paused: "Paused",
+      paused_detail: "Press Resume to continue.",
+      returning: "Returning to the dock",
+      done_returning: "Cleaning done: returning to the dock",
+    },
+    call: {
+      start: "Start",
+      resume: "Resume",
+      pause: "Pause",
+      stop: "Stop",
+      dock: "Return to dock",
+      locate: "Locate",
+      suction: "Fan speed",
+      water: "Water level",
+      setting: "Setting",
+      replaced: "Replaced",
+      volume: "Volume",
+      empty: "Empty dust",
+    },
+    tool: { move: "Select", wall: "Barrier", zone: "No-go zone", split: "Split", merge: "Merge", rename: "Rename" },
+    editor: {
+      open: "Edit",
+      rr_open: "Room names",
+      zoom_in: "Zoom in",
+      zoom_out: "Zoom out",
+      drag_zone: "Drag the zone or its corners.",
+      drag_wall: "Drag the barrier or its ends.",
+      delete: "Delete",
+      move_hint: "Tap a barrier or a zone to move, resize or delete it. When zoomed in, drag to move the view.",
+      wall_hint: "Drag on the map to draw a barrier: the robot will not cross it.",
+      zone_hint: "Drag to draw a rectangle. First choose what to block.",
+      split_pick: "Tap the room to split.",
+      split_line: "Draw a line across all of {room}, from wall to wall.",
+      split_ask: "Split {room} along the line?",
+      cancel: "Cancel",
+      merge_pick: "Tap two adjacent rooms to merge.",
+      merge_pick_one: "Tap two adjacent rooms to merge: {room} and...",
+      merge_ask: "Merge {a} and {b} into one room?",
+      rename_pick: "Tap the room to rename.",
+      room_name: "Room name",
+      save: "Save",
+      wall_item: "Barrier {n}",
+      zone_item: "Zone {n}: {mode}",
+      title: "Edit map",
+      close: "Close",
+      empty: "No barriers or no-go zones.",
+      save_robot: "Save to robot",
+      discard: "Discard changes",
+      save_hint: 'Barriers and zones are saved together with "Save to robot". Splitting, merging and renaming rooms apply right away.',
+      preview: "The map shows the edited rooms as a preview: the exact map comes with the next full cleaning.",
+      unsaved: "There are unsaved changes: tap Close again to discard them.",
+      split_done: "Room split.",
+      merge_done: "Rooms merged.",
+      rename_done: "Name saved.",
+      saved: "Saved: the robot confirmed barriers and zones.",
+      not_saved: "Not saved: {error}",
+      rr_title: "Room names",
+      rr_hint: "Tap a room on the map and type the name. Names stay in Home Assistant, nothing changes on the robot. Leave the field empty to go back to the robot's name.",
+    },
+    edit_errors: [],
+    need_entity: "Needs entity: vacuum.<robot>",
+    entity_missing: "Entity {entity} not found",
+    not_connected: "The robot is not connected to Home Assistant yet: after a restart it takes a couple of minutes. The card updates by itself.",
+    map_error: "Map not available: {error}",
+    unavailable: "Unavailable",
+    cleaning_phase: "Cleaning: {phase}",
+    job_rooms: "Rooms: {rooms}",
+    room: "Room {id}",
+    whole_house: "Whole house",
+    job_other: "Rooms chosen in the Lefant app or by a schedule",
+    job_hint: "The robot does not report which room it is in right now.",
+    map_note: "Map saved from the last full cleaning. Tap the rooms to clean.",
+    map_note_edited: "Map saved from the last full cleaning, with the changes in preview. Tap the rooms to clean.",
+    docked: "Docked",
+    mop_on: "Mop attached",
+    mop_missing: "Mop not attached",
+    dock_alert: "Dock: {alerts}",
+    no_map: "The map appears after the first full cleaning saved to the cloud.",
+    select_none: "Select none",
+    select_all: "Select all",
+    route: "Route",
+    resume: "Resume",
+    stop_return: "Stop returning",
+    clean_one: "Clean 1 room",
+    clean_many: "Clean {n} rooms",
+    clean_all: "Clean the whole house",
+    dock: "Dock",
+    locate: "Locate",
+    passes: "Passes",
+    rooms: "Rooms",
+    selected: "{n} selected, cleaned in this order",
+    none_selected: "none selected: cleans the whole house",
+    fan_title: "Fan speed",
+    water_title: "Water level",
+    hint_off: "Fan and water off: the robot does not clean.",
+    hint_mop: "Mopping only.",
+    hint_vacuum: "Vacuuming only.",
+    hint_both: "Vacuums and mops together.",
+    cleaning_now: "Cleaning in progress",
+    cleaning: "Cleaning",
+    since: "since {time}",
+    wash_one: "mop wash",
+    wash_many: "mop washes",
+    last_cleaning: "Last cleaning",
+    check: "Check",
+    not_read: "Not read yet",
+    base_hint: "The dock warns when a tank or the dust bag is missing. The robot does not report the detergent.",
+    emptying_one: "{n} emptying",
+    emptying_many: "{n} emptyings",
+    confirm: "Confirm?",
+    maintenance: "Maintenance",
+    maint_hint: "The robot does not report wear: Home Assistant counts cleaning hours and emptyings since you last pressed Replaced.",
+    today_at: "today at {time}",
+    yesterday_at: "yesterday at {time}",
+    date_at: "{date} at {time}",
+    picker: "Map with selectable rooms and controls for the {robot} robot",
+    rr_suction: {
+      gentle: "Gentle",
+      quiet: "Quiet",
+      silent: "Silent",
+      balanced: "Balanced",
+      standard: "Standard",
+      medium: "Medium",
+      turbo: "Turbo",
+      max: "Max",
+      max_plus: "Max+",
+      off: "Off",
+    },
+    rr_mode: { vacuum: "Vacuum only", vac_and_mop: "Vacuum and mop" },
+    rr_route: { standard: "Standard", deep: "Deep", deep_plus: "Deep+" },
+    rr_empty: { smart: "Smart", light: "Light", balanced: "Balanced", max: "Max" },
+    rr: {
+      rooms_chosen: "Selected rooms",
+      zone_chosen: "Selected zone",
+      map_note: "Robot map. Tap the rooms to clean.",
+      map_note_updated: "Robot map, updated {when}. Tap the rooms to clean.",
+      mop_off: "Mop not attached",
+      tank_missing: "Water tank missing",
+      out_of_water: "Out of water",
+      mop_hint_on: "Mop attached: mops while vacuuming.",
+      mop_hint_off: "Mop not attached: vacuuming only.",
+      mop_hint_vacuum: "Vacuuming only, even with the mop attached.",
+      mode: "Mode",
+      mop_route: "Mop route",
+      history: "{count} cleanings in total, {hours} h, {area} m²",
+      dock_status: "Dock status",
+      tank: "Water tank",
+      attached: "Attached",
+      missing: "Missing",
+      tank_water: "Water in tank",
+      empty: "Empty",
+      ok: "OK",
+      emptying: "Emptying",
+      emptying_now: "Emptying in progress",
+      empty_now: "Empty now",
+      hours_left: "{hours} h left",
+      replace_now: "Needs replacing",
+      maint_hint: "Hours left as computed by the robot. Press the button after you replace or clean the part.",
+      dnd_hours: "From {start} to {end}, tap a time to change it",
+      dnd_off: "No cleaning or voice at night",
+      dnd: "Do not disturb",
+      dnd_desc: "No scheduled cleaning or voice in those hours",
+      child_lock: "Child lock",
+      child_lock_desc: "Disables the buttons on the robot",
+      volume: "Voice volume",
+      map_in_use: "Selected map",
+      map_hint: "Changes the map the robot cleans with: pick the one for the floor it is on.",
+    },
+  },
+  it: {
+    locale: "it-IT",
+    status: {
+      standby: "In attesa",
+      smart: "Pulizia in corso",
+      zone_clean: "Pulizia zona",
+      part_clean: "Pulizia stanze",
+      cleaning: "Pulizia in corso",
+      paused: "In pausa",
+      goto_pos: "Verso il punto",
+      pos_arrived: "Punto raggiunto",
+      pos_unarrive: "Punto non raggiungibile",
+      goto_charge: "Rientro alla base",
+      charging: "In carica",
+      charge_done: "Carica completa",
+      sleep: "A riposo",
+      relocating: "Si sta localizzando",
+      relocating_recharge: "Cerca la base",
+      recharing_paused: "Rientro in pausa",
+      fastmaping: "Mappatura",
+      fastmaping_paused: "Mappatura in pausa",
+      dust_collection: "Svuota la polvere",
+      wash_mop: "Lava il mop",
+      goto_wash: "Va a lavare il mop",
+      wash_paused: "Lavaggio in pausa",
+      drying: "Asciuga il mop",
+      continuity_clear_charging: "Ricarica, poi riprende",
+      relocating_pause: "Localizzazione in pausa",
+    },
+    errors: {
+      side_brush: "Spazzola laterale",
+      main_brush: "Spazzola principale",
+      left_wheel: "Ruota sinistra",
+      right_wheel: "Ruota destra",
+      dust_bin: "Contenitore polvere",
+      cliff_sensor: "Sensore anticaduta",
+      bumper: "Paraurti",
+      other: "Guasto",
+    },
+    suction: { closed: "Spenta", gentle: "Silenziosa", normal: "Standard", strong: "Forte", superstrong: "Max" },
+    water: { closed: "Spenta", low: "Bassa", middle: "Media", high: "Alta" },
+    settings: {
+      title: "Impostazioni",
+      carpet_boost: "Spinta sui tappeti",
+      carpet_boost_desc: "Aumenta l'aspirazione quando rileva un tappeto",
+      carpet_detection: "Rilevamento tappeti",
+      carpet_detection_desc: "Riconosce i tappeti durante la pulizia",
+      resume: "Riprendi dopo la ricarica",
+      resume_desc: "Se la batteria si scarica, ricarica e finisce il lavoro",
+    },
+    base: { clean_water: "Acqua pulita", dirty_water: "Acqua sporca", dust_bag: "Sacchetto polvere" },
+    parts: {
+      main_brush: "Spazzola principale",
+      side_brush: "Spazzola laterale",
+      filter: "Filtro",
+      mop: "Panni del mop",
+      dust_bag: "Sacchetto della base",
+      sensor: "Sensori",
+      replaced: "Sostituito",
+      replaced_f: "Sostituita",
+      cleaned: "Puliti",
+    },
+    area: { nogo: "Vietata", no_vacuum: "No aspirazione", no_mop: "No mop" },
+    phase: {
+      cleaning: "Sta pulendo",
+      cleaning_in: "Sta pulendo: {room}",
+      zone: "Sta pulendo la zona",
+      goto_pos: "Va al punto scelto",
+      pos_arrived: "Punto raggiunto",
+      relocating: "Cerca la sua posizione sulla mappa",
+      mapping: "Disegna la mappa",
+      goto_wash: "Torna alla base a lavare il mop",
+      goto_wash_detail: "Poi riprende da dove era rimasto.",
+      wash_mop: "Alla base, lava il mop",
+      wash_mop_detail: "Dura circa 2 minuti, poi riprende.",
+      docked: "Alla base, sta per ripartire",
+      charging: "Si ricarica, poi riprende",
+      dust: "Svuota la polvere nella base",
+      paused: "In pausa",
+      paused_detail: "Premi Riprendi per continuare.",
+      returning: "Torna alla base",
+      done_returning: "Pulizia finita: torna alla base",
+    },
+    call: {
+      start: "Avvio",
+      resume: "Ripresa",
+      pause: "Pausa",
+      stop: "Stop",
+      dock: "Rientro",
+      locate: "Trova robot",
+      suction: "Aspirazione",
+      water: "Acqua",
+      setting: "Impostazione",
+      replaced: "Sostituito",
+      volume: "Volume",
+      empty: "Svuotamento",
+    },
+    tool: { move: "Seleziona", wall: "Barriera", zone: "Zona vietata", split: "Dividi", merge: "Unisci", rename: "Rinomina" },
+    editor: {
+      open: "Modifica",
+      rr_open: "Nomi stanze",
+      zoom_in: "Ingrandisci",
+      zoom_out: "Riduci",
+      drag_zone: "Trascina la zona o i suoi angoli.",
+      drag_wall: "Trascina la barriera o le sue estremita'.",
+      delete: "Elimina",
+      move_hint: "Tocca una barriera o una zona per spostarla, ridimensionarla o eliminarla. Con lo zoom, trascina per spostare la vista.",
+      wall_hint: "Trascina sulla mappa per tracciare una barriera: il robot non la attraversa.",
+      zone_hint: "Trascina per disegnare un rettangolo. Scegli prima cosa vietare.",
+      split_pick: "Tocca la stanza da dividere.",
+      split_line: "Traccia una linea che attraversa tutta la stanza {room}, da muro a muro.",
+      split_ask: "Dividere {room} lungo la linea?",
+      cancel: "Annulla",
+      merge_pick: "Tocca due stanze vicine da unire.",
+      merge_pick_one: "Tocca due stanze vicine da unire: {room} e...",
+      merge_ask: "Unire {a} e {b} in una stanza sola?",
+      rename_pick: "Tocca la stanza da rinominare.",
+      room_name: "Nome della stanza",
+      save: "Salva",
+      wall_item: "Barriera {n}",
+      zone_item: "Zona {n}: {mode}",
+      title: "Modifica mappa",
+      close: "Chiudi",
+      empty: "Nessuna barriera o zona vietata.",
+      save_robot: "Salva sul robot",
+      discard: "Annulla modifiche",
+      save_hint: 'Barriere e zone si salvano insieme con "Salva sul robot". Divisione, unione e nomi delle stanze si applicano subito.',
+      preview: "La mappa mostra le stanze modificate in anteprima: quella esatta arriva con la prossima pulizia completa.",
+      unsaved: "Ci sono modifiche non salvate: tocca di nuovo Chiudi per scartarle.",
+      split_done: "Stanza divisa.",
+      merge_done: "Stanze unite.",
+      rename_done: "Nome salvato.",
+      saved: "Salvato: il robot ha confermato barriere e zone.",
+      not_saved: "Non salvato. {error}",
+      rr_title: "Nomi delle stanze",
+      rr_hint: "Tocca una stanza sulla mappa e scrivi il nome. I nomi restano in Home Assistant, sul robot non cambia nulla. Lascia il campo vuoto per tornare al nome del robot.",
+    },
+    edit_errors: [
+      ["the robot did not confirm", "Il robot non ha confermato la modifica."],
+      ["the robot refused to split", "Il robot ha rifiutato la divisione: traccia la linea da muro a muro, attraverso tutta la stanza."],
+      ["the robot refused to merge", "Il robot ha rifiutato l'unione: le due stanze devono toccarsi."],
+      ["the map can be edited only", "La mappa si modifica solo quando il robot non sta pulendo."],
+      ["the robot is not reachable", "Il robot non e' raggiungibile."],
+      ["too many barriers", "Troppe barriere e zone vietate: eliminane qualcuna."],
+      ["no map yet", "Manca la mappa: serve prima una pulizia completa."],
+    ],
+    need_entity: "Serve entity: vacuum.<robot>",
+    entity_missing: "Entita' {entity} non trovata",
+    not_connected: "Il robot non e' ancora collegato a Home Assistant: dopo un riavvio servono un paio di minuti. La scheda si aggiorna da sola.",
+    map_error: "Mappa non disponibile: {error}",
+    unavailable: "Non raggiungibile",
+    cleaning_phase: "Pulizia in corso: {phase}",
+    job_rooms: "Stanze: {rooms}",
+    room: "Stanza {id}",
+    whole_house: "Tutta la casa",
+    job_other: "Stanze scelte dall'app Lefant o da una programmazione",
+    job_hint: "Il robot non comunica in quale stanza si trova in questo momento.",
+    map_note: "Mappa salvata dall'ultima pulizia completa. Tocca le stanze da pulire.",
+    map_note_edited: "Mappa salvata dall'ultima pulizia completa, con le modifiche in anteprima. Tocca le stanze da pulire.",
+    docked: "Sulla base",
+    mop_on: "Mop montato",
+    mop_missing: "Mop assente",
+    dock_alert: "Base: {alerts}",
+    no_map: "La mappa compare dopo la prima pulizia completa salvata sul cloud.",
+    select_none: "Deseleziona",
+    select_all: "Seleziona tutte",
+    route: "Percorso",
+    resume: "Riprendi",
+    stop_return: "Ferma il rientro",
+    clean_one: "Pulisci 1 stanza",
+    clean_many: "Pulisci {n} stanze",
+    clean_all: "Pulisci tutta la casa",
+    dock: "Base",
+    locate: "Trova",
+    passes: "Passate",
+    rooms: "Stanze",
+    selected: "{n} selezionate, pulite in quest'ordine",
+    none_selected: "nessuna selezionata: pulisce tutta la casa",
+    fan_title: "Aspirazione",
+    water_title: "Acqua del mop",
+    hint_off: "Aspirazione e acqua spente: il robot non pulisce.",
+    hint_mop: "Solo lavaggio.",
+    hint_vacuum: "Solo aspirazione.",
+    hint_both: "Aspira e lava insieme.",
+    cleaning_now: "Pulizia in corso",
+    cleaning: "Pulizia",
+    since: "dalle {time}",
+    wash_one: "lavaggio del mop",
+    wash_many: "lavaggi del mop",
+    last_cleaning: "Ultima pulizia",
+    check: "Da controllare",
+    not_read: "Non ancora letto",
+    base_hint: "La base avvisa quando un serbatoio o il sacchetto manca. Il detersivo non viene segnalato dal robot.",
+    emptying_one: "{n} svuotamento",
+    emptying_many: "{n} svuotamenti",
+    confirm: "Confermi?",
+    maintenance: "Manutenzione",
+    maint_hint: "Il robot non manda l'usura dei pezzi: Home Assistant conta le ore di pulizia e gli svuotamenti da quando premi Sostituito.",
+    today_at: "oggi alle {time}",
+    yesterday_at: "ieri alle {time}",
+    date_at: "{date} alle {time}",
+    picker: "Mappa con stanze selezionabili e comandi del robot {robot}",
+    rr_suction: {
+      gentle: "Delicata",
+      quiet: "Silenziosa",
+      silent: "Silenziosa",
+      balanced: "Bilanciata",
+      standard: "Standard",
+      medium: "Media",
+      turbo: "Turbo",
+      max: "Max",
+      max_plus: "Max+",
+      off: "Spenta",
+    },
+    rr_mode: { vacuum: "Solo aspira", vac_and_mop: "Aspira e lava" },
+    rr_route: { standard: "Standard", deep: "Profondo", deep_plus: "Profondo+" },
+    rr_empty: { smart: "Smart", light: "Leggero", balanced: "Bilanciato", max: "Massimo" },
+    rr: {
+      rooms_chosen: "Stanze scelte",
+      zone_chosen: "Zona scelta",
+      map_note: "Mappa del robot. Tocca le stanze da pulire.",
+      map_note_updated: "Mappa del robot, aggiornata {when}. Tocca le stanze da pulire.",
+      mop_off: "Mop non montato",
+      tank_missing: "Serbatoio acqua assente",
+      out_of_water: "Acqua finita",
+      mop_hint_on: "Mop montato: lava mentre aspira.",
+      mop_hint_off: "Mop non montato: solo aspirazione.",
+      mop_hint_vacuum: "Solo aspirazione, anche con il mop montato.",
+      mode: "Modalita'",
+      mop_route: "Percorso del mop",
+      history: "In totale {count} pulizie, {hours} h, {area} m²",
+      dock_status: "Stato della base",
+      tank: "Serbatoio acqua",
+      attached: "Montato",
+      missing: "Assente",
+      tank_water: "Acqua nel serbatoio",
+      empty: "Finita",
+      ok: "OK",
+      emptying: "Svuotamento",
+      emptying_now: "Svuotamento in corso",
+      empty_now: "Svuota ora",
+      hours_left: "{hours} h rimaste",
+      replace_now: "Da sostituire",
+      maint_hint: "Ore rimaste calcolate dal robot. Premi il pulsante dopo aver sostituito o pulito il pezzo.",
+      dnd_hours: "Dalle {start} alle {end}, tocca l'orario per cambiarlo",
+      dnd_off: "Niente pulizie e voce di notte",
+      dnd: "Non disturbare",
+      dnd_desc: "Niente pulizie programmate e voce in quelle ore",
+      child_lock: "Blocco bambini",
+      child_lock_desc: "Disattiva i tasti sul robot",
+      volume: "Volume voce",
+      map_in_use: "Mappa in uso",
+      map_hint: "Cambia la mappa che il robot usa per pulire: scegli quella del piano dove si trova.",
+    },
+  },
 };
 
-const ERRORS = {
-  side_brush: "Spazzola laterale",
-  main_brush: "Spazzola principale",
-  left_wheel: "Ruota sinistra",
-  right_wheel: "Ruota destra",
-  dust_bin: "Contenitore polvere",
-  cliff_sensor: "Sensore anticaduta",
-  bumper: "Paraurti",
-  other: "Guasto",
-};
+export const langOf = (hass) => ((hass?.locale?.language || hass?.language || "").startsWith("it") ? "it" : "en");
+
+export function translate(lang, key, vars = {}) {
+  const text = key?.split(".").reduce((node, part) => node?.[part], STRINGS[lang]);
+  return typeof text === "string" ? text.replace(/\{(\w+)\}/g, (m, name) => vars[name] ?? m) : text;
+}
+
+// the card picker and setConfig run before the card gets hass
+const pageLang = () => langOf(document.querySelector("home-assistant")?.hass);
 
 const SUCTION = [
-  ["closed", "Spenta", "mdi:fan-off"],
-  ["gentle", "Silenziosa", "mdi:fan-speed-1"],
-  ["normal", "Standard", "mdi:fan-speed-2"],
-  ["strong", "Forte", "mdi:fan-speed-3"],
-  ["superStrong", "Max", "mdi:fan-plus"],
+  ["closed", "suction.closed", "mdi:fan-off"],
+  ["gentle", "suction.gentle", "mdi:fan-speed-1"],
+  ["normal", "suction.normal", "mdi:fan-speed-2"],
+  ["strong", "suction.strong", "mdi:fan-speed-3"],
+  ["superstrong", "suction.superstrong", "mdi:fan-plus"],
 ];
 
 const WATER = [
-  ["closed", "Spenta", "mdi:water-off"],
-  ["low", "Bassa", "mdi:water-outline"],
-  ["middle", "Media", "mdi:water"],
-  ["high", "Alta", "mdi:waves"],
+  ["closed", "water.closed", "mdi:water-off"],
+  ["low", "water.low", "mdi:water-outline"],
+  ["middle", "water.middle", "mdi:water"],
+  ["high", "water.high", "mdi:waves"],
 ];
 
 const SETTINGS = [
-  ["14", "Spinta sui tappeti", "Aumenta l'aspirazione quando rileva un tappeto", "mdi:rug"],
-  ["172", "Rilevamento tappeti", "Riconosce i tappeti durante la pulizia", "mdi:texture-box"],
-  ["15", "Riprendi dopo la ricarica", "Se la batteria si scarica, ricarica e finisce il lavoro", "mdi:battery-sync"],
+  ["14", "settings.carpet_boost", "settings.carpet_boost_desc", "mdi:rug"],
+  ["172", "settings.carpet_detection", "settings.carpet_detection_desc", "mdi:texture-box"],
+  ["15", "settings.resume", "settings.resume_desc", "mdi:battery-sync"],
 ];
 
 // base station alerts (DP 158): the robot raises them when the part is out of the base
 const BASE = [
-  ["base_clean_water", "Acqua pulita", "mdi:water"],
-  ["base_dirty_water", "Acqua sporca", "mdi:water-opacity"],
-  ["base_dust_bag", "Sacchetto polvere", "mdi:delete-outline"],
+  ["base_clean_water", "base.clean_water", "mdi:water"],
+  ["base_dirty_water", "base.dirty_water", "mdi:water-opacity"],
+  ["base_dust_bag", "base.dust_bag", "mdi:delete-outline"],
 ];
 const BASE_STATUS = new Set(["dust_collection", "wash_mop", "goto_wash", "wash_paused", "drying"]);
 
-// usage counted by the integration since the last "Sostituito", the robot does not report wear
+// usage counted by the integration since the last "Replaced", the robot does not report wear
 const PARTS = [
-  ["main_brush", "Spazzola principale", "mdi:brush"],
-  ["side_brush", "Spazzola laterale", "mdi:brush"],
-  ["filter", "Filtro", "mdi:air-filter"],
-  ["mop", "Panni del mop", "mdi:waves"],
-  ["dust_bag", "Sacchetto della base", "mdi:delete-outline"],
+  ["main_brush", "parts.main_brush", "mdi:brush"],
+  ["side_brush", "parts.side_brush", "mdi:brush"],
+  ["filter", "parts.filter", "mdi:air-filter"],
+  ["mop", "parts.mop", "mdi:waves"],
+  ["dust_bag", "parts.dust_bag", "mdi:delete-outline"],
 ];
 
 // no greens: the selection uses the primary color, green in the Forge theme
 const ROOM_COLORS = ["#7aa7e8", "#e3b56a", "#a99be6", "#ec9aa9", "#69bfdc", "#f3a76b", "#8f9fc4", "#d79ad8"];
 
 // no-go area modes of the robot protocol
-const AREA_MODES = [[0, "Vietata"], [1, "No aspirazione"], [2, "No mop"]];
+const AREA_MODES = [[0, "area.nogo"], [1, "area.no_vacuum"], [2, "area.no_mop"]];
 const AREA_COLORS = { 0: "#e5484d", 1: "#f59e0b", 2: "#3b82f6" };
 const PIXEL_M = 0.05; // one map unit is 5 cm
 
-// errors of the lefant/* websocket commands, from coordinator.py
-const EDIT_ERRORS = [
-  ["the robot did not confirm", "Il robot non ha confermato la modifica."],
-  ["the robot refused to split", "Il robot ha rifiutato la divisione: traccia la linea da muro a muro, attraverso tutta la stanza."],
-  ["the robot refused to merge", "Il robot ha rifiutato l'unione: le due stanze devono toccarsi."],
-  ["the map can be edited only", "La mappa si modifica solo quando il robot non sta pulendo."],
-  ["the robot is not reachable", "Il robot non e' raggiungibile."],
-  ["too many barriers", "Troppe barriere e zone vietate: eliminane qualcuna."],
-  ["no map yet", "Manca la mappa: serve prima una pulizia completa."],
-];
-const editError = (e) => {
+// errors of the lefant/* websocket commands, from coordinator.py; English shows them as they are
+const editError = (e, lang) => {
   const text = e?.message || String(e);
-  return EDIT_ERRORS.find(([en]) => text.startsWith(en))?.[1] || text;
+  return translate(lang, "edit_errors").find(([en]) => text.startsWith(en))?.[1] || text;
 };
 
 const rectOf = (a, b) => [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1])];
@@ -111,22 +578,22 @@ const rectPoints = (x, y, w, h) => [[x, y], [x + w, y], [x + w, y + h], [x, y + 
 
 // what the robot is doing during a cleaning: [icon, text, detail]
 const PHASE = {
-  smart: ["mdi:robot-vacuum", "Sta pulendo", ""],
-  cleaning: ["mdi:robot-vacuum", "Sta pulendo", ""],
-  part_clean: ["mdi:robot-vacuum", "Sta pulendo", ""],
-  zone_clean: ["mdi:robot-vacuum", "Sta pulendo la zona", ""],
-  goto_pos: ["mdi:map-marker-path", "Va al punto scelto", ""],
-  pos_arrived: ["mdi:map-marker-check-outline", "Punto raggiunto", ""],
-  relocating: ["mdi:crosshairs-question", "Cerca la sua posizione sulla mappa", ""],
-  fastmaping: ["mdi:map-search-outline", "Disegna la mappa", ""],
-  goto_wash: ["mdi:home-import-outline", "Torna alla base a lavare il mop", "Poi riprende da dove era rimasto."],
-  wash_mop: ["mdi:water-sync", "Alla base, lava il mop", "Dura circa 2 minuti, poi riprende."],
-  charging: ["mdi:home-outline", "Alla base, sta per ripartire", ""],
-  charge_done: ["mdi:home-outline", "Alla base, sta per ripartire", ""],
-  continuity_clear_charging: ["mdi:battery-charging", "Si ricarica, poi riprende", ""],
-  dust_collection: ["mdi:delete-empty-outline", "Svuota la polvere nella base", ""],
-  paused: ["mdi:pause-circle-outline", "In pausa", "Premi Riprendi per continuare."],
-  goto_charge: ["mdi:home-import-outline", "Torna alla base", ""],
+  smart: ["mdi:robot-vacuum", "phase.cleaning", ""],
+  cleaning: ["mdi:robot-vacuum", "phase.cleaning", ""],
+  part_clean: ["mdi:robot-vacuum", "phase.cleaning", ""],
+  zone_clean: ["mdi:robot-vacuum", "phase.zone", ""],
+  goto_pos: ["mdi:map-marker-path", "phase.goto_pos", ""],
+  pos_arrived: ["mdi:map-marker-check-outline", "phase.pos_arrived", ""],
+  relocating: ["mdi:crosshairs-question", "phase.relocating", ""],
+  fastmaping: ["mdi:map-search-outline", "phase.mapping", ""],
+  goto_wash: ["mdi:home-import-outline", "phase.goto_wash", "phase.goto_wash_detail"],
+  wash_mop: ["mdi:water-sync", "phase.wash_mop", "phase.wash_mop_detail"],
+  charging: ["mdi:home-outline", "phase.docked", ""],
+  charge_done: ["mdi:home-outline", "phase.docked", ""],
+  continuity_clear_charging: ["mdi:battery-charging", "phase.charging", ""],
+  dust_collection: ["mdi:delete-empty-outline", "phase.dust", ""],
+  paused: ["mdi:pause-circle-outline", "phase.paused", "phase.paused_detail"],
+  goto_charge: ["mdi:home-import-outline", "phase.returning", ""],
 };
 
 const CLEANING = new Set(["smart", "zone_clean", "part_clean", "cleaning", "goto_pos", "pos_arrived",
@@ -155,20 +622,21 @@ function storageSet(key, value) {
   }
 }
 
-function relTime(iso) {
+function relTime(iso, lang) {
   if (!iso) return "";
   const d = new Date(iso);
   const days = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(d).setHours(0, 0, 0, 0)) / 86400000);
-  const hm = d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
-  if (days === 0) return `oggi alle ${hm}`;
-  if (days === 1) return `ieri alle ${hm}`;
-  return `${d.toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short" })} alle ${hm}`;
+  const locale = translate(lang, "locale");
+  const hm = d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+  if (days === 0) return translate(lang, "today_at", { time: hm });
+  if (days === 1) return translate(lang, "yesterday_at", { time: hm });
+  return translate(lang, "date_at", { date: d.toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short" }), time: hm });
 }
 
 class LefantVacuumCard extends HTMLElement {
   setConfig(config) {
     if (!config || !config.entity || !config.entity.startsWith("vacuum.")) {
-      throw new Error("Serve entity: vacuum.<robot>");
+      throw new Error(this._t("need_entity"));
     }
     this._config = config;
     this._selected = [];
@@ -188,6 +656,7 @@ class LefantVacuumCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    this._lang = langOf(hass);
     if (!this.shadowRoot) this._init();
     const mapState = this._data?.entities?.map ? hass.states[this._data.entities.map]?.state : null;
     if (!this._data || (mapState && mapState !== this._mapState) || Date.now() - (this._fetched || 0) > MAP_REFRESH_MS) {
@@ -258,6 +727,10 @@ class LefantVacuumCard extends HTMLElement {
     return id ? this._hass.states[id] : undefined;
   }
 
+  _t(key, vars) {
+    return translate(this._lang || pageLang(), key, vars);
+  }
+
   async _call(label, domain, service, data) {
     this._busy = label;
     this._message = null;
@@ -266,7 +739,7 @@ class LefantVacuumCard extends HTMLElement {
     try {
       await this._hass.callService(domain, service, data);
     } catch (e) {
-      this._message = `${label}: ${e.message || e}`;
+      this._message = `${this._t(label)}: ${e.message || e}`;
     } finally {
       this._busy = null;
       this._sig = "";
@@ -322,34 +795,34 @@ class LefantVacuumCard extends HTMLElement {
             this._render();
           });
         } else {
-          this._call("Avvio", "vacuum", "start", vacuum);
+          this._call("call.start", "vacuum", "start", vacuum);
         }
         break;
       case "resume":
-        this._call("Ripresa", "vacuum", "start", vacuum);
+        this._call("call.resume", "vacuum", "start", vacuum);
         break;
       case "pause":
-        this._call("Pausa", "vacuum", "pause", vacuum);
+        this._call("call.pause", "vacuum", "pause", vacuum);
         break;
       case "stop":
-        this._call("Stop", "vacuum", "stop", vacuum);
+        this._call("call.stop", "vacuum", "stop", vacuum);
         break;
       case "dock":
-        this._call("Rientro", "vacuum", "return_to_base", vacuum);
+        this._call("call.dock", "vacuum", "return_to_base", vacuum);
         break;
       case "locate":
-        this._call("Trova robot", "vacuum", "locate", vacuum);
+        this._call("call.locate", "vacuum", "locate", vacuum);
         break;
       case "suction":
-        this._call("Aspirazione", "vacuum", "set_fan_speed", { ...vacuum, fan_speed: value });
+        this._call("call.suction", "vacuum", "set_fan_speed", { ...vacuum, fan_speed: value });
         break;
       case "water":
-        this._call("Acqua", "select", "select_option", { entity_id: this._data.entities["10"], option: value });
+        this._call("call.water", "select", "select_option", { entity_id: this._data.entities["10"], option: value });
         break;
       case "setting": {
         const st = this._state(value);
         if (!st) return;
-        this._call("Impostazione", "switch", st.state === "on" ? "turn_off" : "turn_on", { entity_id: st.entity_id });
+        this._call("call.setting", "switch", st.state === "on" ? "turn_off" : "turn_on", { entity_id: st.entity_id });
         break;
       }
       case "replaced": {
@@ -365,7 +838,7 @@ class LefantVacuumCard extends HTMLElement {
         }
         this._confirmPart = null;
         const id = this._resetEntity(value);
-        if (id) this._call("Sostituito", "button", "press", { entity_id: id });
+        if (id) this._call("call.replaced", "button", "press", { entity_id: id });
         break;
       }
       case "more": {
@@ -383,7 +856,7 @@ class LefantVacuumCard extends HTMLElement {
       return s ? `${s.state}|${s.attributes.fan_speed ?? ""}|${s.attributes.status ?? ""}|${JSON.stringify(s.attributes.cleaning_job ?? "")}` : "-";
     });
     return [parts.join(","), this._selected.join("."), this._passes, this._busy, this._message, this._error,
-      this._showRoute, this._wide, this._data ? this._fetched : 0, this._edv, this._view?.join(","), this._confirmPart].join("#");
+      this._showRoute, this._wide, this._data ? this._fetched : 0, this._edv, this._view?.join(","), this._confirmPart, this._lang].join("#");
   }
 
   _render() {
@@ -424,12 +897,12 @@ class LefantVacuumCard extends HTMLElement {
 
   _body() {
     const vac = this._state("vacuum");
-    if (!vac) return `<div class="empty">Entita' ${esc(this._config.entity)} non trovata</div>`;
+    if (!vac) return `<div class="empty">${this._t("entity_missing", { entity: esc(this._config.entity) })}</div>`;
     // the card asks again at every state change while it has no data
     if (this._error && !this._data && vac.state === "unavailable") {
-      return `<div class="empty">Il robot non e' ancora collegato a Home Assistant: dopo un riavvio servono un paio di minuti. La scheda si aggiorna da sola.</div>`;
+      return `<div class="empty">${this._t("not_connected")}</div>`;
     }
-    if (this._error && !this._data) return `<div class="empty">Mappa non disponibile: ${esc(this._error)}</div>`;
+    if (this._error && !this._data) return `<div class="empty">${this._t("map_error", { error: esc(this._error) })}</div>`;
     return `
       ${this._header(vac)}
       <div class="main">
@@ -461,7 +934,7 @@ class LefantVacuumCard extends HTMLElement {
         <div class="robot ${CLEANING.has(status) ? "active" : ""}" data-action="more" data-value="vacuum"><ha-icon icon="mdi:robot-vacuum"></ha-icon></div>
         <div class="title">
           <div class="name">${esc(this._config.title || vac.attributes.friendly_name || "Robot")}</div>
-          <div class="status">${unavailable ? "Non raggiungibile" : esc(this._statusText(vac, status))}</div>
+          <div class="status">${unavailable ? this._t("unavailable") : esc(this._statusText(vac, status))}</div>
         </div>
         <div class="battery" data-action="more" data-value="battery"><ha-icon icon="${batIcon}"></ha-icon>${bat === null ? "-" : `${bat}%`}</div>
       </div>
@@ -476,8 +949,8 @@ class LefantVacuumCard extends HTMLElement {
   }
 
   _statusText(vac, status) {
-    if (this._jobInfo(vac) && PHASE[status]) return `Pulizia in corso: ${PHASE[status][1].toLowerCase()}`;
-    return STATUS[status] || status || vac.state;
+    if (this._jobInfo(vac) && PHASE[status]) return this._t("cleaning_phase", { phase: this._t(PHASE[status][1]).toLowerCase() });
+    return this._t(`status.${status}`) || status || vac.state;
   }
 
   // the running cleaning: what it covers, start, mop washes, room the robot is in; null when idle
@@ -485,10 +958,10 @@ class LefantVacuumCard extends HTMLElement {
     const job = vac?.attributes.cleaning_job;
     if (!job) return null;
     const names = Object.fromEntries((this._data?.rooms || []).map((r) => [r.id, r.name]));
-    const scope = job.scope === "rooms" ? `Stanze: ${job.rooms.map((id) => names[id] || `Stanza ${id}`).join(", ")}`
-      : job.scope === "house" ? "Tutta la casa" : "Stanze scelte dall'app Lefant o da una programmazione";
+    const scope = job.scope === "rooms" ? this._t("job_rooms", { rooms: job.rooms.map((id) => names[id] || this._t("room", { id })).join(", ") })
+      : job.scope === "house" ? this._t("whole_house") : this._t("job_other");
     return { scope, started: job.started, washes: job.mop_washes, where: null,
-      hint: "Il robot non comunica in quale stanza si trova in questo momento." };
+      hint: this._t("job_hint") };
   }
 
   _docked() {
@@ -505,7 +978,7 @@ class LefantVacuumCard extends HTMLElement {
   }
 
   _cleanRooms(rooms, repeats) {
-    return this._call("Avvio", "vacuum", "send_command", {
+    return this._call("call.start", "vacuum", "send_command", {
       entity_id: this._config.entity,
       command: "clean_rooms",
       params: { rooms, repeats },
@@ -513,19 +986,19 @@ class LefantVacuumCard extends HTMLElement {
   }
 
   _mapNote() {
-    return `Mappa salvata dall'ultima pulizia completa${this._data.map_edited ? ", con le modifiche in anteprima" : ""}. Tocca le stanze da pulire.`;
+    return this._data.map_edited ? this._t("map_note_edited") : this._t("map_note");
   }
 
   _chips(vac) {
     const error = this._state("error");
     const chips = [];
-    if (this._docked()) chips.push(`<span class="chip"><ha-icon icon="mdi:home-import-outline"></ha-icon>Sulla base</span>`);
+    if (this._docked()) chips.push(`<span class="chip"><ha-icon icon="mdi:home-import-outline"></ha-icon>${this._t("docked")}</span>`);
     const mop = this._state("171");
-    if (mop) chips.push(`<span class="chip ${mop.state === "on" ? "" : "warn"}"><ha-icon icon="${mop.state === "on" ? "mdi:water" : "mdi:water-off"}"></ha-icon>${mop.state === "on" ? "Mop montato" : "Mop assente"}</span>`);
-    const baseAlerts = BASE.filter(([key]) => this._state(key)?.state === "on").map(([, label]) => label.toLowerCase());
-    if (baseAlerts.length) chips.push(`<span class="chip warn"><ha-icon icon="mdi:home-alert-outline"></ha-icon>Base: ${esc(baseAlerts.join(", "))}</span>`);
+    if (mop) chips.push(`<span class="chip ${mop.state === "on" ? "" : "warn"}"><ha-icon icon="${mop.state === "on" ? "mdi:water" : "mdi:water-off"}"></ha-icon>${mop.state === "on" ? this._t("mop_on") : this._t("mop_missing")}</span>`);
+    const baseAlerts = BASE.filter(([key]) => this._state(key)?.state === "on").map(([, label]) => this._t(label).toLowerCase());
+    if (baseAlerts.length) chips.push(`<span class="chip warn"><ha-icon icon="mdi:home-alert-outline"></ha-icon>${this._t("dock_alert", { alerts: esc(baseAlerts.join(", ")) })}</span>`);
     if (error && error.state !== "none" && error.state !== "unavailable" && error.state !== "unknown") {
-      chips.push(`<span class="chip bad" data-action="more" data-value="error"><ha-icon icon="mdi:alert-circle"></ha-icon>${esc(ERRORS[error.state] || error.state)}</span>`);
+      chips.push(`<span class="chip bad" data-action="more" data-value="error"><ha-icon icon="mdi:alert-circle"></ha-icon>${esc(this._t(`errors.${error.state}`) || error.state)}</span>`);
     }
     return chips;
   }
@@ -534,7 +1007,7 @@ class LefantVacuumCard extends HTMLElement {
     const map = this._data?.map;
     const rooms = this._data?.rooms || [];
     if (!map) {
-      return `<div class="map empty-map"><ha-icon icon="mdi:floor-plan"></ha-icon><div>La mappa compare dopo la prima pulizia completa salvata sul cloud.</div></div>`;
+      return `<div class="map empty-map"><ha-icon icon="mdi:floor-plan"></ha-icon><div>${this._t("no_map")}</div></div>`;
     }
     const ed = this._ed;
     const picked = ed ? ed.pick : this._selected;
@@ -557,8 +1030,8 @@ class LefantVacuumCard extends HTMLElement {
     const tools = ed ? this._editBar() : `
         <div class="map-tools">
           ${this._canEdit() ? `<button class="tool" data-action="edit"><ha-icon icon="mdi:pencil-ruler"></ha-icon>${this._editLabel()}</button>` : ""}
-          <button class="tool" data-action="all">${sel.size ? "Deseleziona" : "Seleziona tutte"}</button>
-          <button class="tool ${this._showRoute ? "on" : ""}" data-action="route"><ha-icon icon="mdi:vector-polyline"></ha-icon>Percorso</button>
+          <button class="tool" data-action="all">${sel.size ? this._t("select_none") : this._t("select_all")}</button>
+          <button class="tool ${this._showRoute ? "on" : ""}" data-action="route"><ha-icon icon="mdi:vector-polyline"></ha-icon>${this._t("route")}</button>
         </div>`;
     const note = ed ? this._editContext()
       : `<div class="map-note">${esc(this._mapNote())}</div>`;
@@ -579,9 +1052,9 @@ class LefantVacuumCard extends HTMLElement {
             <g class="overlay"></g>
           </svg>
           ${ed ? `<div class="zoom">
-            <button class="tool" data-action="ed-zoom" data-value="in" title="Ingrandisci"><ha-icon icon="mdi:plus"></ha-icon></button>
-            <button class="tool" data-action="ed-zoom" data-value="out" title="Riduci"><ha-icon icon="mdi:minus"></ha-icon></button>
-            <button class="tool" data-action="ed-zoom" data-value="fit" title="Tutta la casa"><ha-icon icon="mdi:fit-to-page-outline"></ha-icon></button>
+            <button class="tool" data-action="ed-zoom" data-value="in" title="${this._t("editor.zoom_in")}"><ha-icon icon="mdi:plus"></ha-icon></button>
+            <button class="tool" data-action="ed-zoom" data-value="out" title="${this._t("editor.zoom_out")}"><ha-icon icon="mdi:minus"></ha-icon></button>
+            <button class="tool" data-action="ed-zoom" data-value="fit" title="${this._t("whole_house")}"><ha-icon icon="mdi:fit-to-page-outline"></ha-icon></button>
           </div>` : ""}
         </div>
         ${ed ? "" : tools}
@@ -629,14 +1102,14 @@ class LefantVacuumCard extends HTMLElement {
   _editBar() {
     const ed = this._ed;
     const tool = (id, icon, label) =>
-      `<button class="etool ${ed.tool === id ? "on" : ""}" data-action="ed-tool" data-value="${id}" ${ed.busy ? "disabled" : ""}><ha-icon icon="${icon}"></ha-icon><span>${label}</span></button>`;
+      `<button class="etool ${ed.tool === id ? "on" : ""}" data-action="ed-tool" data-value="${id}" ${ed.busy ? "disabled" : ""}><ha-icon icon="${icon}"></ha-icon><span>${this._t(label)}</span></button>`;
     const tools = {
-      move: ["mdi:cursor-default-click-outline", "Seleziona"],
-      wall: ["mdi:wall", "Barriera"],
-      zone: ["mdi:selection-ellipse-remove", "Zona vietata"],
-      split: ["mdi:call-split", "Dividi"],
-      merge: ["mdi:call-merge", "Unisci"],
-      rename: ["mdi:form-textbox", "Rinomina"],
+      move: ["mdi:cursor-default-click-outline", "tool.move"],
+      wall: ["mdi:wall", "tool.wall"],
+      zone: ["mdi:selection-ellipse-remove", "tool.zone"],
+      split: ["mdi:call-split", "tool.split"],
+      merge: ["mdi:call-merge", "tool.merge"],
+      rename: ["mdi:form-textbox", "tool.rename"],
     };
     return `<div class="edit-bar">${this._editTools().map((id) => tool(id, ...tools[id])).join("")}</div>`;
   }
@@ -646,7 +1119,7 @@ class LefantVacuumCard extends HTMLElement {
   }
 
   _editLabel() {
-    return "Modifica";
+    return this._t("editor.open");
   }
 
   _editContext() {
@@ -656,43 +1129,43 @@ class LefantVacuumCard extends HTMLElement {
     let hint = "";
     let actions = "";
     const modes = () => `<span class="seg small">${AREA_MODES.map(([m, label]) =>
-      `<button class="${ed.zoneMode === m ? "on" : ""}" data-action="ed-zone-mode" data-value="${m}">${label}</button>`).join("")}</span>`;
+      `<button class="${ed.zoneMode === m ? "on" : ""}" data-action="ed-zone-mode" data-value="${m}">${this._t(label)}</button>`).join("")}</span>`;
     switch (ed.tool) {
       case "move":
         if (ed.sel) {
-          hint = ed.sel.kind === "area" ? "Trascina la zona o i suoi angoli." : "Trascina la barriera o le sue estremita'.";
-          actions = `${ed.sel.kind === "area" ? modes() : ""}<button class="ebtn danger" data-action="ed-delete" ${busy}><ha-icon icon="mdi:delete-outline"></ha-icon>Elimina</button>`;
+          hint = ed.sel.kind === "area" ? this._t("editor.drag_zone") : this._t("editor.drag_wall");
+          actions = `${ed.sel.kind === "area" ? modes() : ""}<button class="ebtn danger" data-action="ed-delete" ${busy}><ha-icon icon="mdi:delete-outline"></ha-icon>${this._t("editor.delete")}</button>`;
         } else {
-          hint = "Tocca una barriera o una zona per spostarla, ridimensionarla o eliminarla. Con lo zoom, trascina per spostare la vista.";
+          hint = this._t("editor.move_hint");
         }
         break;
       case "wall":
-        hint = "Trascina sulla mappa per tracciare una barriera: il robot non la attraversa.";
+        hint = this._t("editor.wall_hint");
         break;
       case "zone":
-        hint = "Trascina per disegnare un rettangolo. Scegli prima cosa vietare.";
+        hint = this._t("editor.zone_hint");
         actions = modes();
         break;
       case "split":
-        if (!ed.pick.length) hint = "Tocca la stanza da dividere.";
-        else if (!ed.line) hint = `Traccia una linea che attraversa tutta la stanza ${esc(names[ed.pick[0]])}, da muro a muro.`;
+        if (!ed.pick.length) hint = this._t("editor.split_pick");
+        else if (!ed.line) hint = this._t("editor.split_line", { room: esc(names[ed.pick[0]]) });
         else {
-          hint = `Dividere ${esc(names[ed.pick[0]])} lungo la linea?`;
-          actions = `<button class="ebtn primary" data-action="ed-split" ${busy}><ha-icon icon="mdi:call-split"></ha-icon>Dividi</button><button class="ebtn" data-action="ed-pick-clear" ${busy}>Annulla</button>`;
+          hint = this._t("editor.split_ask", { room: esc(names[ed.pick[0]]) });
+          actions = `<button class="ebtn primary" data-action="ed-split" ${busy}><ha-icon icon="mdi:call-split"></ha-icon>${this._t("tool.split")}</button><button class="ebtn" data-action="ed-pick-clear" ${busy}>${this._t("editor.cancel")}</button>`;
         }
         break;
       case "merge":
-        if (ed.pick.length < 2) hint = `Tocca due stanze vicine da unire${ed.pick.length ? `: ${esc(names[ed.pick[0]])} e...` : "."}`;
+        if (ed.pick.length < 2) hint = ed.pick.length ? this._t("editor.merge_pick_one", { room: esc(names[ed.pick[0]]) }) : this._t("editor.merge_pick");
         else {
-          hint = `Unire ${esc(names[ed.pick[0]])} e ${esc(names[ed.pick[1]])} in una stanza sola?`;
-          actions = `<button class="ebtn primary" data-action="ed-merge" ${busy}><ha-icon icon="mdi:call-merge"></ha-icon>Unisci</button><button class="ebtn" data-action="ed-pick-clear" ${busy}>Annulla</button>`;
+          hint = this._t("editor.merge_ask", { a: esc(names[ed.pick[0]]), b: esc(names[ed.pick[1]]) });
+          actions = `<button class="ebtn primary" data-action="ed-merge" ${busy}><ha-icon icon="mdi:call-merge"></ha-icon>${this._t("tool.merge")}</button><button class="ebtn" data-action="ed-pick-clear" ${busy}>${this._t("editor.cancel")}</button>`;
         }
         break;
       case "rename":
-        if (!ed.pick.length) hint = "Tocca la stanza da rinominare.";
+        if (!ed.pick.length) hint = this._t("editor.rename_pick");
         else {
           hint = "";
-          actions = `<input class="rename" maxlength="40" value="${esc(names[ed.pick[0]])}" aria-label="Nome della stanza"><button class="ebtn primary" data-action="ed-rename" ${busy}><ha-icon icon="mdi:check"></ha-icon>Salva</button><button class="ebtn" data-action="ed-pick-clear" ${busy}>Annulla</button>`;
+          actions = `<input class="rename" maxlength="40" value="${esc(names[ed.pick[0]])}" aria-label="${this._t("editor.room_name")}"><button class="ebtn primary" data-action="ed-rename" ${busy}><ha-icon icon="mdi:check"></ha-icon>${this._t("editor.save")}</button><button class="ebtn" data-action="ed-pick-clear" ${busy}>${this._t("editor.cancel")}</button>`;
         }
         break;
     }
@@ -713,29 +1186,29 @@ class LefantVacuumCard extends HTMLElement {
     const items = [
       ...ed.walls.map((w, i) => {
         const len = Math.hypot(w[1][0] - w[0][0], w[1][1] - w[0][1]) * PIXEL_M;
-        return `<div class="item ${ed.sel?.kind === "wall" && ed.sel.i === i ? "on" : ""}"><span class="swatch wall"></span><button class="link" data-action="ed-select" data-value="wall:${i}">Barriera ${i + 1}<span class="muted">${len.toFixed(1)} m</span></button><button class="icon-btn" data-action="ed-delete-item" data-value="wall:${i}" ${busy} title="Elimina"><ha-icon icon="mdi:delete-outline"></ha-icon></button></div>`;
+        return `<div class="item ${ed.sel?.kind === "wall" && ed.sel.i === i ? "on" : ""}"><span class="swatch wall"></span><button class="link" data-action="ed-select" data-value="wall:${i}">${this._t("editor.wall_item", { n: i + 1 })}<span class="muted">${len.toFixed(1)} m</span></button><button class="icon-btn" data-action="ed-delete-item" data-value="wall:${i}" ${busy} title="${this._t("editor.delete")}"><ha-icon icon="mdi:delete-outline"></ha-icon></button></div>`;
       }),
       ...ed.areas.map((a, i) => {
         const xs = a.points.map((p) => p[0]);
         const ys = a.points.map((p) => p[1]);
         const size = `${((Math.max(...xs) - Math.min(...xs)) * PIXEL_M).toFixed(1)} × ${((Math.max(...ys) - Math.min(...ys)) * PIXEL_M).toFixed(1)} m`;
-        return `<div class="item ${ed.sel?.kind === "area" && ed.sel.i === i ? "on" : ""}"><span class="swatch" style="--zone:${AREA_COLORS[a.mode]}"></span><button class="link" data-action="ed-select" data-value="area:${i}">Zona ${i + 1}: ${modeName[a.mode]}<span class="muted">${size}</span></button><button class="icon-btn" data-action="ed-delete-item" data-value="area:${i}" ${busy} title="Elimina"><ha-icon icon="mdi:delete-outline"></ha-icon></button></div>`;
+        return `<div class="item ${ed.sel?.kind === "area" && ed.sel.i === i ? "on" : ""}"><span class="swatch" style="--zone:${AREA_COLORS[a.mode]}"></span><button class="link" data-action="ed-select" data-value="area:${i}">${this._t("editor.zone_item", { n: i + 1, mode: this._t(modeName[a.mode]) })}<span class="muted">${size}</span></button><button class="icon-btn" data-action="ed-delete-item" data-value="area:${i}" ${busy} title="${this._t("editor.delete")}"><ha-icon icon="mdi:delete-outline"></ha-icon></button></div>`;
       }),
     ];
     return `
       <div class="panel">
-        <div class="panel-title">Modifica mappa<button class="ebtn" data-action="ed-exit" ${busy}><ha-icon icon="mdi:close"></ha-icon>Chiudi</button></div>
+        <div class="panel-title">${this._t("editor.title")}<button class="ebtn" data-action="ed-exit" ${busy}><ha-icon icon="mdi:close"></ha-icon>${this._t("editor.close")}</button></div>
         <div class="legend">
-          <span><span class="swatch wall"></span>Barriera</span>
-          ${AREA_MODES.map(([m, label]) => `<span><span class="swatch" style="--zone:${AREA_COLORS[m]}"></span>${label}</span>`).join("")}
+          <span><span class="swatch wall"></span>${this._t("tool.wall")}</span>
+          ${AREA_MODES.map(([m, label]) => `<span><span class="swatch" style="--zone:${AREA_COLORS[m]}"></span>${this._t(label)}</span>`).join("")}
         </div>
-        ${items.length ? `<div class="items">${items.join("")}</div>` : `<div class="muted">Nessuna barriera o zona vietata.</div>`}
+        ${items.length ? `<div class="items">${items.join("")}</div>` : `<div class="muted">${this._t("editor.empty")}</div>`}
         <div class="save-row">
-          <button class="ebtn primary" data-action="ed-save" ${changed && !ed.busy ? "" : "disabled"}>${ed.busy ? `<span class="spinner"></span>` : `<ha-icon icon="mdi:content-save-outline"></ha-icon>`}Salva sul robot</button>
-          <button class="ebtn" data-action="ed-discard" ${changed && !ed.busy ? "" : "disabled"}>Annulla modifiche</button>
+          <button class="ebtn primary" data-action="ed-save" ${changed && !ed.busy ? "" : "disabled"}>${ed.busy ? `<span class="spinner"></span>` : `<ha-icon icon="mdi:content-save-outline"></ha-icon>`}${this._t("editor.save_robot")}</button>
+          <button class="ebtn" data-action="ed-discard" ${changed && !ed.busy ? "" : "disabled"}>${this._t("editor.discard")}</button>
         </div>
-        <div class="muted">Barriere e zone si salvano insieme con "Salva sul robot". Divisione, unione e nomi delle stanze si applicano subito.
-        ${this._data.map_edited ? "La mappa mostra le stanze modificate in anteprima: quella esatta arriva con la prossima pulizia completa." : ""}</div>
+        <div class="muted">${this._t("editor.save_hint")}
+        ${this._data.map_edited ? this._t("editor.preview") : ""}</div>
       </div>`;
   }
 
@@ -793,7 +1266,7 @@ class LefantVacuumCard extends HTMLElement {
         if (this._dirty().walls || this._dirty().areas) {
           if (ed.confirm !== "exit") {
             ed.confirm = "exit";
-            ed.msg = { text: "Ci sono modifiche non salvate: tocca di nuovo Chiudi per scartarle.", error: true };
+            ed.msg = { text: this._t("editor.unsaved"), error: true };
             break;
           }
         }
@@ -808,14 +1281,14 @@ class LefantVacuumCard extends HTMLElement {
         this._editSave();
         return;
       case "ed-split":
-        this._roomOp({ type: "lefant/split_room", room_id: ed.pick[0], line: ed.line }, "Stanza divisa.");
+        this._roomOp({ type: "lefant/split_room", room_id: ed.pick[0], line: ed.line }, this._t("editor.split_done"));
         return;
       case "ed-merge":
-        this._roomOp({ type: "lefant/merge_rooms", room_ids: ed.pick }, "Stanze unite.");
+        this._roomOp({ type: "lefant/merge_rooms", room_ids: ed.pick }, this._t("editor.merge_done"));
         return;
       case "ed-rename": {
         const input = this.shadowRoot.querySelector("input.rename");
-        this._roomOp({ type: "lefant/rename_room", room_id: ed.pick[0], name: input ? input.value : "" }, "Nome salvato.");
+        this._roomOp({ type: "lefant/rename_room", room_id: ed.pick[0], name: input ? input.value : "" }, this._t("editor.rename_done"));
         return;
       }
       case "ed-zoom":
@@ -841,9 +1314,9 @@ class LefantVacuumCard extends HTMLElement {
       ed.areas = JSON.parse(JSON.stringify(this._data.areas || []));
       ed.walls = JSON.parse(JSON.stringify(this._data.walls || []));
       ed.sel = null;
-      ed.msg = { text: "Salvato: il robot ha confermato barriere e zone." };
+      ed.msg = { text: this._t("editor.saved") };
     } catch (e) {
-      ed.msg = { text: `Non salvato. ${editError(e)}`, error: true };
+      ed.msg = { text: this._t("editor.not_saved", { error: editError(e, this._lang) }), error: true };
     } finally {
       ed.busy = false;
       this._fetched = Date.now();
@@ -863,7 +1336,7 @@ class LefantVacuumCard extends HTMLElement {
       ed.msg = { text: okText };
       this._fitBox = null;
     } catch (e) {
-      ed.msg = { text: editError(e), error: true };
+      ed.msg = { text: editError(e, this._lang), error: true };
     } finally {
       ed.busy = false;
       this._fetched = Date.now();
@@ -1110,29 +1583,29 @@ class LefantVacuumCard extends HTMLElement {
     let secondary = [];
     // between two mop washes the robot reports "charging" for a moment: the cleaning is still running
     if (CLEANING.has(status) || (this._jobInfo(vac) && !PAUSED.has(status) && !RETURNING.has(status))) {
-      primary = `<button class="primary" data-action="pause" ${off}>${busy("Pausa")}<ha-icon icon="mdi:pause"></ha-icon>Pausa</button>`;
+      primary = `<button class="primary" data-action="pause" ${off}>${busy("call.pause")}<ha-icon icon="mdi:pause"></ha-icon>${this._t("call.pause")}</button>`;
       secondary = ["stop", "dock"];
     } else if (PAUSED.has(status)) {
-      primary = `<button class="primary" data-action="resume" ${off}>${busy("Ripresa")}<ha-icon icon="mdi:play"></ha-icon>Riprendi</button>`;
+      primary = `<button class="primary" data-action="resume" ${off}>${busy("call.resume")}<ha-icon icon="mdi:play"></ha-icon>${this._t("resume")}</button>`;
       secondary = ["stop", "dock"];
     } else if (RETURNING.has(status)) {
-      primary = `<button class="primary" data-action="pause" ${off}>${busy("Pausa")}<ha-icon icon="mdi:pause"></ha-icon>Ferma il rientro</button>`;
+      primary = `<button class="primary" data-action="pause" ${off}>${busy("call.pause")}<ha-icon icon="mdi:pause"></ha-icon>${this._t("stop_return")}</button>`;
       secondary = ["stop"];
     } else {
-      const label = n ? `Pulisci ${n === 1 ? "1 stanza" : `${n} stanze`}` : "Pulisci tutta la casa";
-      primary = `<button class="primary" data-action="start" ${off}>${busy("Avvio")}<ha-icon icon="mdi:play"></ha-icon>${label}</button>`;
+      const label = n ? (n === 1 ? this._t("clean_one") : this._t("clean_many", { n })) : this._t("clean_all");
+      primary = `<button class="primary" data-action="start" ${off}>${busy("call.start")}<ha-icon icon="mdi:play"></ha-icon>${label}</button>`;
       secondary = this._docked() ? [] : ["dock"];
     }
     const sec = {
-      stop: `<button data-action="stop" ${off}>${busy("Stop")}<ha-icon icon="mdi:stop"></ha-icon>Stop</button>`,
-      dock: `<button data-action="dock" ${off}>${busy("Rientro")}<ha-icon icon="mdi:home-import-outline"></ha-icon>Base</button>`,
+      stop: `<button data-action="stop" ${off}>${busy("call.stop")}<ha-icon icon="mdi:stop"></ha-icon>${this._t("call.stop")}</button>`,
+      dock: `<button data-action="dock" ${off}>${busy("call.dock")}<ha-icon icon="mdi:home-import-outline"></ha-icon>${this._t("dock")}</button>`,
     };
     return `
       <div class="panel actions">
         ${primary}
         <div class="row">
           ${secondary.map((k) => sec[k]).join("")}
-          <button data-action="locate" ${off}>${busy("Trova robot")}<ha-icon icon="mdi:map-marker-radius"></ha-icon>Trova</button>
+          <button data-action="locate" ${off}>${busy("call.locate")}<ha-icon icon="mdi:map-marker-radius"></ha-icon>${this._t("locate")}</button>
         </div>
       </div>`;
   }
@@ -1148,11 +1621,11 @@ class LefantVacuumCard extends HTMLElement {
         ${order >= 0 ? `<span class="num">${order + 1}</span>` : `<span class="dot"></span>`}${esc(r.name)}${r.area ? `<span class="muted">${r.area} m²</span>` : ""}</button>`;
     }).join("");
     const passes = this._selected.length && idle
-      ? `<div class="sub">Passate <span class="seg small">${[1, 2, 3].map((p) => `<button class="${p === this._passes ? "on" : ""}" data-action="passes" data-value="${p}">${p}×</button>`).join("")}</span></div>`
+      ? `<div class="sub">${this._t("passes")} <span class="seg small">${[1, 2, 3].map((p) => `<button class="${p === this._passes ? "on" : ""}" data-action="passes" data-value="${p}">${p}×</button>`).join("")}</span></div>`
       : "";
     return `
       <div class="panel">
-        <div class="panel-title">Stanze<span class="muted">${this._selected.length ? `${this._selected.length} selezionate, pulite in quest'ordine` : "nessuna selezionata: pulisce tutta la casa"}</span></div>
+        <div class="panel-title">${this._t("rooms")}<span class="muted">${this._selected.length ? this._t("selected", { n: this._selected.length }) : this._t("none_selected")}</span></div>
         <div class="room-chips">${chips}</div>
         ${passes}
       </div>`;
@@ -1163,17 +1636,17 @@ class LefantVacuumCard extends HTMLElement {
     const water = this._state("10")?.state;
     const off = vac.state === "unavailable" || this._busy ? "disabled" : "";
     const seg = (items, current, action) => `<div class="seg">${items.map(([v, label, icon]) =>
-      `<button class="${v === current ? "on" : ""}" data-action="${action}" data-value="${v}" ${off}><ha-icon icon="${icon}"></ha-icon><span>${label}</span></button>`).join("")}</div>`;
+      `<button class="${v === current ? "on" : ""}" data-action="${action}" data-value="${v}" ${off}><ha-icon icon="${icon}"></ha-icon><span>${this._t(label)}</span></button>`).join("")}</div>`;
     let hint = "";
-    if (fan === "closed" && water === "closed") hint = "Aspirazione e acqua spente: il robot non pulisce.";
-    else if (fan === "closed") hint = "Solo lavaggio.";
-    else if (water === "closed" || this._state("171")?.state === "off") hint = "Solo aspirazione.";
-    else hint = "Aspira e lava insieme.";
+    if (fan === "closed" && water === "closed") hint = this._t("hint_off");
+    else if (fan === "closed") hint = this._t("hint_mop");
+    else if (water === "closed" || this._state("171")?.state === "off") hint = this._t("hint_vacuum");
+    else hint = this._t("hint_both");
     return `
       <div class="panel">
-        <div class="panel-title">Aspirazione</div>
+        <div class="panel-title">${this._t("fan_title")}</div>
         ${seg(SUCTION, fan, "suction")}
-        <div class="panel-title">Acqua del mop</div>
+        <div class="panel-title">${this._t("water_title")}</div>
         ${seg(WATER, water, "water")}
         <div class="hint">${hint}</div>
       </div>`;
@@ -1183,21 +1656,22 @@ class LefantVacuumCard extends HTMLElement {
     const status = this._status(vac);
     const job = this._jobInfo(vac);
     if (!job && !CLEANING.has(status) && !PAUSED.has(status) && !RETURNING.has(status)) return "";
-    let [icon, text, detail] = PHASE[status] || ["mdi:robot-vacuum", this._statusText(vac, status), ""];
-    if (!job && RETURNING.has(status)) [icon, text, detail] = ["mdi:home-import-outline", "Pulizia finita: torna alla base", ""];
-    if (job?.where && PHASE[status]?.[1] === "Sta pulendo") text = `Sta pulendo: ${job.where}`;
+    const phase = PHASE[status];
+    let [icon, text, detail] = phase ? [phase[0], this._t(phase[1]), this._t(phase[2])] : ["mdi:robot-vacuum", this._statusText(vac, status), ""];
+    if (!job && RETURNING.has(status)) [icon, text, detail] = ["mdi:home-import-outline", this._t("phase.done_returning"), ""];
+    if (job?.where && phase?.[1] === "phase.cleaning") text = this._t("phase.cleaning_in", { room: job.where });
     const t = Number(this._state("cleaning_time")?.state);
     const a = Number(this._state("cleaning_area")?.state);
-    const since = job?.started ? `dalle ${new Date(job.started).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}` : "";
+    const since = job?.started ? this._t("since", { time: new Date(job.started).toLocaleTimeString(this._t("locale"), { hour: "2-digit", minute: "2-digit" }) }) : "";
     return `
       <div class="panel now">
-        <div class="panel-title">${job ? "Pulizia in corso" : "Pulizia"}<span class="muted">${since}</span></div>
+        <div class="panel-title">${job ? this._t("cleaning_now") : this._t("cleaning")}<span class="muted">${since}</span></div>
         <div class="phase"><ha-icon icon="${icon}"></ha-icon><span class="text"><b>${esc(text)}</b>${detail ? `<span class="muted">${esc(detail)}</span>` : ""}</span></div>
         ${job?.scope ? `<div class="scope"><ha-icon icon="mdi:floor-plan"></ha-icon>${esc(job.scope)}</div>` : ""}
         <div class="stats">
           <div><ha-icon icon="mdi:timer-outline"></ha-icon><b>${isNaN(t) ? "-" : Math.round(t)}</b> min</div>
           <div><ha-icon icon="mdi:texture-box"></ha-icon><b>${isNaN(a) ? "-" : Math.round(a)}</b> m²</div>
-          ${job?.washes ? `<div><ha-icon icon="mdi:water-sync"></ha-icon><b>${job.washes}</b> ${job.washes === 1 ? "lavaggio" : "lavaggi"} del mop</div>` : ""}
+          ${job?.washes ? `<div><ha-icon icon="mdi:water-sync"></ha-icon><b>${job.washes}</b> ${job.washes === 1 ? this._t("wash_one") : this._t("wash_many")}</div>` : ""}
         </div>
         ${job?.hint ? `<div class="hint">${esc(job.hint)}</div>` : ""}
       </div>`;
@@ -1208,10 +1682,10 @@ class LefantVacuumCard extends HTMLElement {
     if (!last) return "";
     const names = Object.fromEntries((this._data.rooms || []).map((r) => [r.id, r.name]));
     const rooms = !last.rooms ? "" : last.rooms.length
-      ? last.rooms.map((id) => names[id] || last.names?.[id] || `Stanza ${id}`).join(", ") : "tutta la casa";
+      ? last.rooms.map((id) => names[id] || last.names?.[id] || this._t("room", { id })).join(", ") : this._t("whole_house").toLowerCase();
     return `
       <div class="panel last" data-action="more" data-value="${this._lastCleaningKey()}">
-        <div class="panel-title">Ultima pulizia<span class="muted">${esc(relTime(last.end))}</span></div>
+        <div class="panel-title">${this._t("last_cleaning")}<span class="muted">${esc(relTime(last.end, this._lang))}</span></div>
         <div class="stats">
           <div><ha-icon icon="mdi:timer-check-outline"></ha-icon><b>${last.minutes}</b> min</div>
           <div><ha-icon icon="mdi:texture-box"></ha-icon><b>${last.area}</b> m²</div>
@@ -1238,17 +1712,17 @@ class LefantVacuumCard extends HTMLElement {
       return `
         <div class="part" data-action="more" data-value="${key}">
           <ha-icon icon="${icon}"></ha-icon>
-          <span class="text">${label}</span>
-          <span class="pill ${alert ? "warn" : known ? "ok" : ""}">${alert ? "Da controllare" : known ? "OK" : "Non ancora letto"}</span>
+          <span class="text">${this._t(label)}</span>
+          <span class="pill ${alert ? "warn" : known ? "ok" : ""}">${alert ? this._t("check") : known ? "OK" : this._t("not_read")}</span>
         </div>`;
     }).join("");
     if (!rows) return "";
     const status = this._status(vac);
     return `
       <div class="panel">
-        <div class="panel-title">Base<span class="muted">${BASE_STATUS.has(status) ? esc(STATUS[status]) : ""}</span></div>
+        <div class="panel-title">${this._t("dock")}<span class="muted">${BASE_STATUS.has(status) ? esc(this._t(`status.${status}`)) : ""}</span></div>
         <div class="parts">${rows}</div>
-        <div class="hint">La base avvisa quando un serbatoio o il sacchetto manca. Il detersivo non viene segnalato dal robot.</div>
+        <div class="hint">${this._t("base_hint")}</div>
       </div>`;
   }
 
@@ -1261,26 +1735,26 @@ class LefantVacuumCard extends HTMLElement {
       let text = "-";
       if (!isNaN(value)) {
         if (part === "dust_bag") {
-          text = `${value} ${value === 1 ? "svuotamento" : "svuotamenti"}`;
+          text = value === 1 ? this._t("emptying_one", { n: value }) : this._t("emptying_many", { n: value });
         } else {
           if (st.attributes.unit_of_measurement === "min") value /= 60;
-          text = `${value < 10 ? value.toFixed(1).replace(".", ",") : Math.round(value)} h`;
+          text = `${value < 10 ? value.toLocaleString(this._t("locale"), { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : Math.round(value)} h`;
         }
       }
       const confirm = this._confirmPart === part;
       return `
         <div class="part">
           <ha-icon icon="${icon}"></ha-icon>
-          <span class="text" data-action="more" data-value="${key}">${label}<span class="muted">${text}</span></span>
-          <button class="ebtn ${confirm ? "primary" : ""}" data-action="replaced" data-value="${part}" ${this._busy ? "disabled" : ""}>${confirm ? "Confermi?" : "Sostituito"}</button>
+          <span class="text" data-action="more" data-value="${key}">${this._t(label)}<span class="muted">${text}</span></span>
+          <button class="ebtn ${confirm ? "primary" : ""}" data-action="replaced" data-value="${part}" ${this._busy ? "disabled" : ""}>${confirm ? this._t("confirm") : this._t("parts.replaced")}</button>
         </div>`;
     }).join("");
     if (!rows) return "";
     return `
       <div class="panel">
-        <div class="panel-title">Manutenzione</div>
+        <div class="panel-title">${this._t("maintenance")}</div>
         <div class="parts">${rows}</div>
-        <div class="hint">Il robot non manda l'usura dei pezzi: Home Assistant conta le ore di pulizia e gli svuotamenti da quando premi Sostituito.</div>
+        <div class="hint">${this._t("maint_hint")}</div>
       </div>`;
   }
 
@@ -1293,11 +1767,11 @@ class LefantVacuumCard extends HTMLElement {
       return `
         <button class="setting" role="switch" aria-checked="${on}" data-action="setting" data-value="${key}" ${off}>
           <ha-icon icon="${icon}"></ha-icon>
-          <span class="text"><span>${label}</span><span class="muted">${desc}</span></span>
+          <span class="text"><span>${this._t(label)}</span><span class="muted">${this._t(desc)}</span></span>
           <span class="toggle ${on ? "on" : ""}"><span></span></span>
         </button>`;
     }).join("");
-    return rows ? `<div class="panel"><div class="panel-title">Impostazioni</div>${rows}</div>` : "";
+    return rows ? `<div class="panel"><div class="panel-title">${this._t("settings.title")}</div>${rows}</div>` : "";
   }
 }
 
@@ -1318,27 +1792,27 @@ const RR_STATUS = {
 const RR_ACTIVITY = { cleaning: "cleaning", returning: "goto_charge", paused: "paused", docked: "charging" };
 
 const RR_SUCTION = {
-  gentle: ["Delicata", "mdi:fan-speed-1"],
-  quiet: ["Silenziosa", "mdi:fan-speed-1"],
-  silent: ["Silenziosa", "mdi:fan-speed-1"],
-  balanced: ["Bilanciata", "mdi:fan-speed-2"],
-  standard: ["Standard", "mdi:fan-speed-2"],
-  medium: ["Media", "mdi:fan-speed-2"],
-  turbo: ["Turbo", "mdi:fan-speed-3"],
-  max: ["Max", "mdi:fan-plus"],
-  max_plus: ["Max+", "mdi:fan-plus"],
-  off: ["Spenta", "mdi:fan-off"],
+  gentle: ["rr_suction.gentle", "mdi:fan-speed-1"],
+  quiet: ["rr_suction.quiet", "mdi:fan-speed-1"],
+  silent: ["rr_suction.silent", "mdi:fan-speed-1"],
+  balanced: ["rr_suction.balanced", "mdi:fan-speed-2"],
+  standard: ["rr_suction.standard", "mdi:fan-speed-2"],
+  medium: ["rr_suction.medium", "mdi:fan-speed-2"],
+  turbo: ["rr_suction.turbo", "mdi:fan-speed-3"],
+  max: ["rr_suction.max", "mdi:fan-plus"],
+  max_plus: ["rr_suction.max_plus", "mdi:fan-plus"],
+  off: ["rr_suction.off", "mdi:fan-off"],
 };
-const RR_WATER = [["off", "Spenta", "mdi:water-off"], ["low", "Bassa", "mdi:water-outline"], ["medium", "Media", "mdi:water"], ["high", "Alta", "mdi:waves"]];
-const RR_MODE = [["vacuum", "Solo aspira", "mdi:robot-vacuum"], ["vac_and_mop", "Aspira e lava", "mdi:robot-vacuum-variant"]];
-const RR_ROUTE = [["standard", "Standard"], ["deep", "Profondo"], ["deep_plus", "Profondo+"]];
-const RR_EMPTY = [["smart", "Smart"], ["light", "Leggero"], ["balanced", "Bilanciato"], ["max", "Massimo"]];
+const RR_WATER = [["off", "water.closed", "mdi:water-off"], ["low", "water.low", "mdi:water-outline"], ["medium", "water.middle", "mdi:water"], ["high", "water.high", "mdi:waves"]];
+const RR_MODE = [["vacuum", "rr_mode.vacuum", "mdi:robot-vacuum"], ["vac_and_mop", "rr_mode.vac_and_mop", "mdi:robot-vacuum-variant"]];
+const RR_ROUTE = [["standard", "rr_route.standard"], ["deep", "rr_route.deep"], ["deep_plus", "rr_route.deep_plus"]];
+const RR_EMPTY = [["smart", "rr_empty.smart"], ["light", "rr_empty.light"], ["balanced", "rr_empty.balanced"], ["max", "rr_empty.max"]];
 // [part, label, icon, hours of a new part as in the Roborock app, button text]
 const RR_PARTS = [
-  ["main_brush", "Spazzola principale", "mdi:brush", 300, "Sostituita"],
-  ["side_brush", "Spazzola laterale", "mdi:brush", 200, "Sostituita"],
-  ["filter", "Filtro", "mdi:air-filter", 150, "Sostituito"],
-  ["sensor", "Sensori", "mdi:eye-outline", 30, "Puliti"],
+  ["main_brush", "parts.main_brush", "mdi:brush", 300, "parts.replaced_f"],
+  ["side_brush", "parts.side_brush", "mdi:brush", 200, "parts.replaced_f"],
+  ["filter", "parts.filter", "mdi:air-filter", 150, "parts.replaced"],
+  ["sensor", "parts.sensor", "mdi:eye-outline", 30, "parts.cleaned"],
 ];
 const RR_RESET = { main_brush: "main_brush", side_brush: "side_brush", filter: "air_filter", sensor: "sensor" };
 
@@ -1348,7 +1822,7 @@ class RoborockVacuumCard extends LefantVacuumCard {
     this.shadowRoot.addEventListener("change", (ev) => {
       const el = ev.composedPath().find((n) => n.dataset && n.dataset.change);
       if (el?.dataset.change === "volume" && this._data?.entities?.volume) {
-        this._call("Volume", "number", "set_value", { entity_id: this._data.entities.volume, value: Number(el.value) });
+        this._call("call.volume", "number", "set_value", { entity_id: this._data.entities.volume, value: Number(el.value) });
       }
     });
   }
@@ -1379,7 +1853,7 @@ class RoborockVacuumCard extends LefantVacuumCard {
     if (!CLEANING.has(status) && !PAUSED.has(status)) return null;
     const room = this._state("current_room");
     const where = room && !["unknown", "unavailable"].includes(room.state) ? this._hass.formatEntityState(room) : null;
-    const scope = status === "part_clean" ? "Stanze scelte" : status === "zone_clean" ? "Zona scelta" : "Tutta la casa";
+    const scope = status === "part_clean" ? this._t("rr.rooms_chosen") : status === "zone_clean" ? this._t("rr.zone_chosen") : this._t("whole_house");
     return { scope, started: null, washes: null, where, hint: null };
   }
 
@@ -1388,7 +1862,7 @@ class RoborockVacuumCard extends LefantVacuumCard {
   }
 
   _cleanRooms(rooms, repeats) {
-    return this._call("Avvio", "vacuum", "send_command", {
+    return this._call("call.start", "vacuum", "send_command", {
       entity_id: this._config.entity,
       command: "app_segment_clean",
       params: [{ segments: rooms, repeat: repeats }],
@@ -1405,36 +1879,34 @@ class RoborockVacuumCard extends LefantVacuumCard {
   }
 
   _editLabel() {
-    return "Nomi stanze";
+    return this._t("editor.rr_open");
   }
 
   _editSide() {
     return `
       <div class="panel">
-        <div class="panel-title">Nomi delle stanze<button class="ebtn" data-action="ed-exit" ${this._ed.busy ? "disabled" : ""}><ha-icon icon="mdi:close"></ha-icon>Chiudi</button></div>
-        <div class="muted">Tocca una stanza sulla mappa e scrivi il nome. I nomi restano in Home Assistant, sul robot non cambia nulla.
-        Lascia il campo vuoto per tornare al nome del robot.</div>
+        <div class="panel-title">${this._t("editor.rr_title")}<button class="ebtn" data-action="ed-exit" ${this._ed.busy ? "disabled" : ""}><ha-icon icon="mdi:close"></ha-icon>${this._t("editor.close")}</button></div>
+        <div class="muted">${this._t("editor.rr_hint")}</div>
       </div>`;
   }
 
   _mapNote() {
-    const when = this._data.map_updated ? `, aggiornata ${relTime(this._data.map_updated)}` : "";
-    return `Mappa del robot${when}. Tocca le stanze da pulire.`;
+    return this._data.map_updated ? this._t("rr.map_note_updated", { when: relTime(this._data.map_updated, this._lang) }) : this._t("rr.map_note");
   }
 
   _chips(vac) {
     const chips = [];
     const on = (key) => this._state(key)?.state === "on";
     const chip = (cls, icon, text, key) => `<span class="chip ${cls}" ${key ? `data-action="more" data-value="${key}"` : ""}><ha-icon icon="${icon}"></ha-icon>${esc(text)}</span>`;
-    if (this._docked()) chips.push(chip("", "mdi:home-import-outline", "Sulla base"));
+    if (this._docked()) chips.push(chip("", "mdi:home-import-outline", this._t("docked")));
     const mop = this._state("water_box_carriage_status");
-    if (mop) chips.push(mop.state === "on" ? chip("", "mdi:water", "Mop montato") : chip("", "mdi:water-off", "Mop non montato"));
-    if (this._state("water_box_status")?.state === "off") chips.push(chip("warn", "mdi:cup-off-outline", "Serbatoio acqua assente", "water_box_status"));
-    if (on("water_shortage")) chips.push(chip("warn", "mdi:water-alert-outline", "Acqua finita", "water_shortage"));
+    if (mop) chips.push(mop.state === "on" ? chip("", "mdi:water", this._t("mop_on")) : chip("", "mdi:water-off", this._t("rr.mop_off")));
+    if (this._state("water_box_status")?.state === "off") chips.push(chip("warn", "mdi:cup-off-outline", this._t("rr.tank_missing"), "water_box_status"));
+    if (on("water_shortage")) chips.push(chip("warn", "mdi:water-alert-outline", this._t("rr.out_of_water"), "water_shortage"));
     const err = this._state("vacuum_error");
     if (err && !["none", "unknown", "unavailable"].includes(err.state)) chips.push(chip("bad", "mdi:alert-circle", this._hass.formatEntityState(err), "vacuum_error"));
     const dock = this._state("dock_error");
-    if (dock && !["ok", "unknown", "unavailable"].includes(dock.state)) chips.push(chip("bad", "mdi:home-alert-outline", `Base: ${this._hass.formatEntityState(dock)}`, "dock_error"));
+    if (dock && !["ok", "unknown", "unavailable"].includes(dock.state)) chips.push(chip("bad", "mdi:home-alert-outline", this._t("dock_alert", { alerts: this._hass.formatEntityState(dock) }), "dock_error"));
     return chips;
   }
 
@@ -1445,7 +1917,7 @@ class RoborockVacuumCard extends LefantVacuumCard {
     const ent = this._data?.entities || {};
     switch (action) {
       case "water":
-        this._call("Acqua", "select", "select_option", { entity_id: ent.water_box_mode, option: value });
+        this._call("call.water", "select", "select_option", { entity_id: ent.water_box_mode, option: value });
         return;
       case "rr-select": {
         const [key, option] = value.split("|");
@@ -1461,11 +1933,11 @@ class RoborockVacuumCard extends LefantVacuumCard {
           return;
         }
         this._confirmPart = null;
-        if (ent[key]) this._call("Impostazione", "select", "select_option", { entity_id: ent[key], option });
+        if (ent[key]) this._call("call.setting", "select", "select_option", { entity_id: ent[key], option });
         return;
       }
       case "rr-empty":
-        if (ent.dust_emptying) this._call("Svuotamento", "switch", "turn_on", { entity_id: ent.dust_emptying });
+        if (ent.dust_emptying) this._call("call.empty", "switch", "turn_on", { entity_id: ent.dust_emptying });
         return;
     }
     super._onClick(ev);
@@ -1474,24 +1946,24 @@ class RoborockVacuumCard extends LefantVacuumCard {
   _modes(vac) {
     const off = vac.state === "unavailable" || this._busy ? "disabled" : "";
     const seg = (items, current, action, prefix = "") => `<div class="seg">${items.map(([v, label, icon]) =>
-      `<button class="${v === current ? "on" : ""}" data-action="${action}" data-value="${prefix}${v}" ${off}>${icon ? `<ha-icon icon="${icon}"></ha-icon>` : ""}<span>${label}</span></button>`).join("")}</div>`;
+      `<button class="${v === current ? "on" : ""}" data-action="${action}" data-value="${prefix}${v}" ${off}>${icon ? `<ha-icon icon="${icon}"></ha-icon>` : ""}<span>${label ? this._t(label) : v}</span></button>`).join("")}</div>`;
     const fan = vac.attributes.fan_speed;
-    const fans = (vac.attributes.fan_speed_list || []).map((v) => [v, ...(RR_SUCTION[v] || [v, "mdi:fan"])]);
+    const fans = (vac.attributes.fan_speed_list || []).map((v) => [v, ...(RR_SUCTION[v] || [null, "mdi:fan"])]);
     const water = this._state("water_box_mode");
     const mode = this._state("cleaning_mode");
     const route = this._state("mop_mode");
     const mopOn = this._state("water_box_carriage_status")?.state === "on";
     // segmented buttons of a Roborock select entity, only for the options the robot offers
     const select = (key, st, items) => seg(items.filter(([v]) => st.attributes.options?.includes(v)), st.state, "rr-select", `${key}|`);
-    let hint = mopOn ? "Mop montato: lava mentre aspira." : "Mop non montato: solo aspirazione.";
-    if (mode?.state === "vacuum") hint = "Solo aspirazione, anche con il mop montato.";
+    let hint = mopOn ? this._t("rr.mop_hint_on") : this._t("rr.mop_hint_off");
+    if (mode?.state === "vacuum") hint = this._t("rr.mop_hint_vacuum");
     return `
       <div class="panel">
-        ${mode && mode.state !== "unavailable" ? `<div class="panel-title">Modalita'</div>${select("cleaning_mode", mode, RR_MODE)}` : ""}
-        <div class="panel-title">Aspirazione</div>
+        ${mode && mode.state !== "unavailable" ? `<div class="panel-title">${this._t("rr.mode")}</div>${select("cleaning_mode", mode, RR_MODE)}` : ""}
+        <div class="panel-title">${this._t("fan_title")}</div>
         ${seg(fans, fan, "suction")}
-        ${water && water.state !== "unavailable" ? `<div class="panel-title">Acqua del mop</div>${seg(RR_WATER.filter(([v]) => water.attributes.options?.includes(v)), water.state, "water")}` : ""}
-        ${route && route.state !== "unavailable" ? `<div class="panel-title">Percorso del mop</div>${select("mop_mode", route, RR_ROUTE)}` : ""}
+        ${water && water.state !== "unavailable" ? `<div class="panel-title">${this._t("water_title")}</div>${seg(RR_WATER.filter(([v]) => water.attributes.options?.includes(v)), water.state, "water")}` : ""}
+        ${route && route.state !== "unavailable" ? `<div class="panel-title">${this._t("rr.mop_route")}</div>${select("mop_mode", route, RR_ROUTE)}` : ""}
         <div class="hint">${hint}</div>
       </div>`;
   }
@@ -1501,7 +1973,7 @@ class RoborockVacuumCard extends LefantVacuumCard {
     const hours = Number(this._state("total_cleaning_time")?.state);
     const area = Number(this._state("total_cleaning_area")?.state);
     if (!count || isNaN(hours)) return "";
-    return `<div class="muted">In totale ${esc(count)} pulizie, ${Math.round(hours)} h, ${Math.round(area).toLocaleString("it-IT")} m²</div>`;
+    return `<div class="muted">${this._t("rr.history", { count: esc(count), hours: Math.round(hours), area: Math.round(area).toLocaleString(this._t("locale")) })}</div>`;
   }
 
   _lastCleaningKey() {
@@ -1520,31 +1992,31 @@ class RoborockVacuumCard extends LefantVacuumCard {
     if (dock) {
       rows.push(`
         <div class="part" data-action="more" data-value="dock_error">
-          <ha-icon icon="mdi:home-outline"></ha-icon><span class="text">Stato della base</span>
+          <ha-icon icon="mdi:home-outline"></ha-icon><span class="text">${this._t("rr.dock_status")}</span>
           <span class="pill ${ok ? "ok" : "warn"}">${ok ? "OK" : esc(this._hass.formatEntityState(dock))}</span>
         </div>`);
     }
     for (const [key, label, icon, onText, offText] of [
-      ["water_box_status", "Serbatoio acqua", "mdi:cup-water", "Montato", "Assente"],
-      ["water_shortage", "Acqua nel serbatoio", "mdi:water", "Finita", "OK"],
+      ["water_box_status", "rr.tank", "mdi:cup-water", "rr.attached", "rr.missing"],
+      ["water_shortage", "rr.tank_water", "mdi:water", "rr.empty", "rr.ok"],
     ]) {
       const st = this._state(key);
       if (!st || st.state === "unavailable") continue;
       const bad = key === "water_shortage" ? st.state === "on" : st.state === "off";
       rows.push(`
         <div class="part" data-action="more" data-value="${key}">
-          <ha-icon icon="${icon}"></ha-icon><span class="text">${label}</span>
-          <span class="pill ${bad ? "warn" : "ok"}">${st.state === "on" ? onText : offText}</span>
+          <ha-icon icon="${icon}"></ha-icon><span class="text">${this._t(label)}</span>
+          <span class="pill ${bad ? "warn" : "ok"}">${this._t(st.state === "on" ? onText : offText)}</span>
         </div>`);
     }
     const busyEmpty = emptying?.state === "on" || status === "dust_collection";
     return `
       <div class="panel">
-        <div class="panel-title">Base<span class="muted">${BASE_STATUS.has(status) ? esc(this._statusText(vac)) : ""}</span></div>
+        <div class="panel-title">${this._t("dock")}<span class="muted">${BASE_STATUS.has(status) ? esc(this._statusText(vac)) : ""}</span></div>
         <div class="parts">${rows.join("")}</div>
-        ${mode && mode.state !== "unavailable" ? `<div class="sub">Svuotamento</div>${`<div class="seg">${RR_EMPTY.filter(([v]) => mode.attributes.options?.includes(v)).map(([v, label]) =>
-          `<button class="${v === mode.state ? "on" : ""}" data-action="rr-select" data-value="dust_collection_mode|${v}" ${off}><span>${label}</span></button>`).join("")}</div>`}` : ""}
-        ${emptying ? `<button class="ebtn" data-action="rr-empty" ${off || (busyEmpty ? "disabled" : "")}><ha-icon icon="mdi:delete-empty-outline"></ha-icon>${busyEmpty ? "Svuotamento in corso" : "Svuota ora"}</button>` : ""}
+        ${mode && mode.state !== "unavailable" ? `<div class="sub">${this._t("rr.emptying")}</div>${`<div class="seg">${RR_EMPTY.filter(([v]) => mode.attributes.options?.includes(v)).map(([v, label]) =>
+          `<button class="${v === mode.state ? "on" : ""}" data-action="rr-select" data-value="dust_collection_mode|${v}" ${off}><span>${this._t(label)}</span></button>`).join("")}</div>`}` : ""}
+        ${emptying ? `<button class="ebtn" data-action="rr-empty" ${off || (busyEmpty ? "disabled" : "")}><ha-icon icon="mdi:delete-empty-outline"></ha-icon>${busyEmpty ? this._t("rr.emptying_now") : this._t("rr.empty_now")}</button>` : ""}
       </div>`;
   }
 
@@ -1561,17 +2033,17 @@ class RoborockVacuumCard extends LefantVacuumCard {
       return `
         <div class="part">
           <ha-icon icon="${icon}"></ha-icon>
-          <span class="text" data-action="more" data-value="${key}">${label}<span class="muted">${known ? (left > 0 ? `${Math.round(left)} h rimaste` : "Da sostituire") : "-"}</span>
+          <span class="text" data-action="more" data-value="${key}">${this._t(label)}<span class="muted">${known ? (left > 0 ? this._t("rr.hours_left", { hours: Math.round(left) }) : this._t("rr.replace_now")) : "-"}</span>
             <span class="bar ${known && pct <= 10 ? "low" : ""}"><span style="width:${pct}%"></span></span></span>
-          ${reset ? `<button class="ebtn ${confirm ? "primary" : ""}" data-action="replaced" data-value="${part}" ${this._busy ? "disabled" : ""}>${confirm ? "Confermi?" : done}</button>` : ""}
+          ${reset ? `<button class="ebtn ${confirm ? "primary" : ""}" data-action="replaced" data-value="${part}" ${this._busy ? "disabled" : ""}>${confirm ? this._t("confirm") : this._t(done)}</button>` : ""}
         </div>`;
     }).join("");
     if (!rows) return "";
     return `
       <div class="panel">
-        <div class="panel-title">Manutenzione</div>
+        <div class="panel-title">${this._t("maintenance")}</div>
         <div class="parts">${rows}</div>
-        <div class="hint">Ore rimaste calcolate dal robot. Premi il pulsante dopo aver sostituito o pulito il pezzo.</div>
+        <div class="hint">${this._t("rr.maint_hint")}</div>
       </div>`;
   }
 
@@ -1584,30 +2056,30 @@ class RoborockVacuumCard extends LefantVacuumCard {
       return `
         <button class="setting" role="switch" aria-checked="${on}" data-action="setting" data-value="${key}" ${st.state === "unavailable" ? "disabled" : off}>
           <ha-icon icon="${icon}"></ha-icon>
-          <span class="text"><span>${label}</span><span class="muted">${desc}</span></span>
+          <span class="text"><span>${this._t(label)}</span><span class="muted">${this._t(desc)}</span></span>
           <span class="toggle ${on ? "on" : ""}"><span></span></span>
         </button>`;
     };
     const hm = (key) => (this._state(key)?.state || "").slice(0, 5);
-    const dnd = hm("dnd_start_time") && hm("dnd_end_time") ? `Dalle ${hm("dnd_start_time")} alle ${hm("dnd_end_time")}, tocca l'orario per cambiarlo` : "Niente pulizie e voce di notte";
+    const dnd = hm("dnd_start_time") && hm("dnd_end_time") ? this._t("rr.dnd_hours", { start: hm("dnd_start_time"), end: hm("dnd_end_time") }) : this._t("rr.dnd_off");
     const volume = this._state("volume");
     const maps = this._state("selected_map");
     return `
       <div class="panel">
-        <div class="panel-title">Impostazioni</div>
-        ${toggle("dnd_switch", "Non disturbare", "Niente pulizie programmate e voce in quelle ore", "mdi:bell-sleep-outline")}
+        <div class="panel-title">${this._t("settings.title")}</div>
+        ${toggle("dnd_switch", "rr.dnd", "rr.dnd_desc", "mdi:bell-sleep-outline")}
         ${this._state("dnd_start_time") ? `<div class="sub dnd"><span class="muted">${esc(dnd)}</span><span>
           <button class="ebtn" data-action="more" data-value="dnd_start_time">${esc(hm("dnd_start_time"))}</button>
           <button class="ebtn" data-action="more" data-value="dnd_end_time">${esc(hm("dnd_end_time"))}</button></span></div>` : ""}
-        ${toggle("child_lock", "Blocco bambini", "Disattiva i tasti sul robot", "mdi:lock-outline")}
+        ${toggle("child_lock", "rr.child_lock", "rr.child_lock_desc", "mdi:lock-outline")}
         ${volume && volume.state !== "unavailable" ? `
-          <label class="setting volume"><ha-icon icon="mdi:volume-high"></ha-icon><span class="text"><span>Volume voce</span></span>
+          <label class="setting volume"><ha-icon icon="mdi:volume-high"></ha-icon><span class="text"><span>${this._t("rr.volume")}</span></span>
             <input type="range" min="${volume.attributes.min ?? 0}" max="${volume.attributes.max ?? 100}" step="${volume.attributes.step ?? 1}" value="${Number(volume.state)}" data-change="volume" ${off}>
             <span class="muted">${Math.round(Number(volume.state))}%</span></label>` : ""}
         ${maps && maps.state !== "unavailable" && (maps.attributes.options || []).length > 1 ? `
-          <div class="sub">Mappa in uso</div>
-          <div class="seg">${maps.attributes.options.map((v) => `<button class="${v === maps.state ? "on" : ""}" data-action="rr-select" data-value="selected_map|${esc(v)}" ${off}><span>${this._confirmPart === `selected_map|${v}` ? "Confermi?" : esc(v)}</span></button>`).join("")}</div>
-          <div class="hint">Cambia la mappa che il robot usa per pulire: scegli quella del piano dove si trova.</div>` : ""}
+          <div class="sub">${this._t("rr.map_in_use")}</div>
+          <div class="seg">${maps.attributes.options.map((v) => `<button class="${v === maps.state ? "on" : ""}" data-action="rr-select" data-value="selected_map|${esc(v)}" ${off}><span>${this._confirmPart === `selected_map|${v}` ? this._t("confirm") : esc(v)}</span></button>`).join("")}</div>
+          <div class="hint">${this._t("rr.map_hint")}</div>` : ""}
       </div>`;
   }
 }
@@ -1775,7 +2247,7 @@ if (!customElements.get("lefant-vacuum-card")) {
   window.customCards.push({
     type: "lefant-vacuum-card",
     name: "Lefant robot",
-    description: "Mappa con stanze selezionabili e comandi del robot Lefant",
+    description: translate(pageLang(), "picker", { robot: "Lefant" }),
   });
 }
 
@@ -1789,6 +2261,6 @@ if (!customElements.get("roborock-vacuum-card")) {
   window.customCards.push({
     type: "roborock-vacuum-card",
     name: "Roborock robot",
-    description: "Mappa con stanze selezionabili e comandi del robot Roborock",
+    description: translate(pageLang(), "picker", { robot: "Roborock" }),
   });
 }

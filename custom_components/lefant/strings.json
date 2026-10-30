@@ -60,7 +60,7 @@
           "standby": "Standby",
           "smart": "Cleaning",
           "zone_clean": "Zone cleaning",
-          "part_clean": "Spot cleaning",
+          "part_clean": "Room cleaning",
           "cleaning": "Cleaning",
           "paused": "Paused",
           "goto_pos": "Going to target",
