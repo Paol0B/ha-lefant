@@ -1,0 +1,49 @@
+{
+  "entity": {
+    "sensor": {
+      "cleaning_time": { "default": "mdi:timer-outline" },
+      "cleaning_area": { "default": "mdi:texture-box" },
+      "status": { "default": "mdi:robot-vacuum" },
+      "error": { "default": "mdi:alert-circle-outline" },
+      "alarm_code": { "default": "mdi:alert-octagon-outline" },
+      "last_cleaning_end": { "default": "mdi:calendar-check" },
+      "last_cleaning_duration": { "default": "mdi:timer-check-outline" },
+      "last_cleaning_area": { "default": "mdi:texture-box" },
+      "main_brush_usage": { "default": "mdi:brush" },
+      "side_brush_usage": { "default": "mdi:brush" },
+      "filter_usage": { "default": "mdi:air-filter" },
+      "mop_usage": { "default": "mdi:waves" },
+      "dust_bag_emptyings": { "default": "mdi:delete-outline" }
+    },
+    "binary_sensor": {
+      "mop_attached": { "default": "mdi:water-off", "state": { "on": "mdi:water" } },
+      "docked": { "default": "mdi:home-export-outline", "state": { "on": "mdi:home-import-outline" } },
+      "base_clean_water": { "default": "mdi:water-check", "state": { "on": "mdi:water-alert" } },
+      "base_dirty_water": {
+        "default": "mdi:water-check-outline",
+        "state": {
+          "on": "mdi:water-alert-outline"
+        }
+      },
+      "base_dust_bag": { "default": "mdi:delete-outline", "state": { "on": "mdi:delete-alert-outline" } }
+    },
+    "button": {
+      "reset_main_brush": { "default": "mdi:restore" },
+      "reset_side_brush": { "default": "mdi:restore" },
+      "reset_filter": { "default": "mdi:restore" },
+      "reset_mop": { "default": "mdi:restore" },
+      "reset_dust_bag": { "default": "mdi:restore" }
+    },
+    "select": {
+      "water_level": { "default": "mdi:water-percent" }
+    },
+    "switch": {
+      "carpet_boost": { "default": "mdi:rug" },
+      "carpet_detection": { "default": "mdi:rug" },
+      "resume_after_charge": { "default": "mdi:play-circle-outline" }
+    },
+    "image": {
+      "map": { "default": "mdi:floor-plan" }
+    }
+  }
+}

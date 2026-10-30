@@ -1,0 +1,13 @@
+{
+  "domain": "lefant",
+  "name": "Lefant",
+  "codeowners": ["@Paol0B"],
+  "config_flow": true,
+  "dependencies": ["frontend", "http", "websocket_api"],
+  "documentation": "https://github.com/Paol0B/ha-lefant",
+  "integration_type": "device",
+  "iot_class": "local_push",
+  "loggers": ["tinytuya"],
+  "requirements": ["tinytuya==1.20.0"],
+  "version": "0.5.3"
+}

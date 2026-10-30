@@ -1,0 +1,160 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Lefant robot",
+        "description": "Local Tuya connection to the robot. Device ID and local key come from the Smart Life account. The optional Tuya cloud project adds the cleaning map.",
+        "data": {
+          "host": "Host",
+          "device_id": "Device ID",
+          "local_key": "Local key",
+          "protocol_version": "Tuya protocol version",
+          "access_id": "Cloud Access ID",
+          "access_secret": "Cloud Access Secret",
+          "region": "Cloud data center"
+        },
+        "data_description": {
+          "host": "IP address or name where TCP port 6668 of the robot is reachable.",
+          "access_id": "From the cloud project on platform.tuya.com, with the Sweeping Robot Open Service authorized. Leave empty for local control only."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the robot. Check host, device ID, local key and protocol version.",
+      "cloud_failed": "The Tuya cloud project rejected the request. Check Access ID, Access Secret, data center and that the Smart Life account is linked."
+    },
+    "abort": {
+      "already_configured": "This robot is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Room names",
+        "description": "Names used for room cleaning and on the map. Room IDs reported by the robot: {rooms}. Leave a field empty to use the name stored on the robot."
+      }
+    }
+  },
+  "entity": {
+    "vacuum": {
+      "vacuum": {
+        "state_attributes": {
+          "fan_speed": {
+            "state": {
+              "closed": "Off",
+              "gentle": "Quiet",
+              "normal": "Standard",
+              "strong": "Strong",
+              "superStrong": "Max"
+            }
+          }
+        }
+      }
+    },
+    "sensor": {
+      "cleaning_time": { "name": "Cleaning time" },
+      "cleaning_area": { "name": "Cleaning area" },
+      "status": {
+        "name": "Status",
+        "state": {
+          "standby": "Standby",
+          "smart": "Cleaning",
+          "zone_clean": "Zone cleaning",
+          "part_clean": "Spot cleaning",
+          "cleaning": "Cleaning",
+          "paused": "Paused",
+          "goto_pos": "Going to target",
+          "pos_arrived": "Target reached",
+          "pos_unarrive": "Target unreachable",
+          "goto_charge": "Returning to dock",
+          "charging": "Charging",
+          "charge_done": "Charged",
+          "sleep": "Sleeping",
+          "relocating": "Relocating",
+          "relocating_recharge": "Relocating to dock",
+          "recharing_paused": "Return paused",
+          "fastmaping": "Mapping",
+          "fastmaping_paused": "Mapping paused",
+          "dust_collection": "Emptying dust",
+          "wash_mop": "Washing mop",
+          "goto_wash": "Going to wash mop",
+          "wash_paused": "Washing paused",
+          "drying": "Drying mop",
+          "continuity_clear_charging": "Charging to resume",
+          "relocating_pause": "Relocating paused"
+        }
+      },
+      "error": {
+        "name": "Error",
+        "state": {
+          "none": "None",
+          "side_brush": "Side brush",
+          "main_brush": "Main brush",
+          "left_wheel": "Left wheel",
+          "right_wheel": "Right wheel",
+          "dust_bin": "Dust bin",
+          "cliff_sensor": "Cliff sensor",
+          "bumper": "Bumper",
+          "other": "Other"
+        }
+      },
+      "alarm_code": { "name": "Alarm code" },
+      "last_cleaning_end": { "name": "Last cleaning" },
+      "last_cleaning_duration": { "name": "Last cleaning duration" },
+      "last_cleaning_area": { "name": "Last cleaning area" },
+      "main_brush_usage": { "name": "Main brush usage" },
+      "side_brush_usage": { "name": "Side brush usage" },
+      "filter_usage": { "name": "Filter usage" },
+      "mop_usage": { "name": "Mop pads usage" },
+      "dust_bag_emptyings": { "name": "Dust bag emptyings" }
+    },
+    "binary_sensor": {
+      "mop_attached": { "name": "Mop attached" },
+      "docked": { "name": "Docked" },
+      "problem": { "name": "Problem" },
+      "base_clean_water": { "name": "Clean water tank" },
+      "base_dirty_water": { "name": "Dirty water tank" },
+      "base_dust_bag": { "name": "Dust bag" }
+    },
+    "button": {
+      "reset_main_brush": { "name": "Main brush replaced" },
+      "reset_side_brush": { "name": "Side brush replaced" },
+      "reset_filter": { "name": "Filter replaced" },
+      "reset_mop": { "name": "Mop pads replaced" },
+      "reset_dust_bag": { "name": "Dust bag replaced" }
+    },
+    "select": {
+      "water_level": {
+        "name": "Water level",
+        "state": {
+          "closed": "Off",
+          "low": "Low",
+          "middle": "Medium",
+          "high": "High"
+        }
+      }
+    },
+    "switch": {
+      "carpet_boost": { "name": "Carpet boost" },
+      "carpet_detection": { "name": "Carpet detection" },
+      "resume_after_charge": { "name": "Resume after charging" }
+    },
+    "image": {
+      "map": { "name": "Last cleaning map" }
+    }
+  },
+  "exceptions": {
+    "cannot_connect": {
+      "message": "Cannot connect to the robot at {host}: {error}"
+    },
+    "command_failed": {
+      "message": "Command for {entity_id} failed: {error}"
+    },
+    "unknown_rooms": {
+      "message": "Unknown rooms {rooms}. Rooms reported by the robot: {known}"
+    },
+    "unknown_command": {
+      "message": "Unknown command {command}. Supported: clean_rooms, set_dp"
+    }
+  }
+}
