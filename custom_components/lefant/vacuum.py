@@ -30,7 +30,8 @@ async def async_setup_entry(
 class LefantVacuum(LefantEntity, StateVacuumEntity):
     _attr_name = None
     _attr_translation_key = "vacuum"
-    _attr_fan_speed_list = protocol.FAN_SPEEDS
+    # translation keys must be lowercase, the robot sends "superStrong"
+    _attr_fan_speed_list = [speed.lower() for speed in protocol.FAN_SPEEDS]
     _attr_supported_features = (
         VacuumEntityFeature.START
         | VacuumEntityFeature.PAUSE
@@ -65,7 +66,8 @@ class LefantVacuum(LefantEntity, StateVacuumEntity):
 
     @property
     def fan_speed(self) -> str | None:
-        return self.dp(protocol.DP_SUCTION)
+        speed = self.dp(protocol.DP_SUCTION)
+        return speed.lower() if isinstance(speed, str) else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -95,7 +97,14 @@ class LefantVacuum(LefantEntity, StateVacuumEntity):
         await self._async_command({protocol.DP_SEEK: True})
 
     async def async_set_fan_speed(self, fan_speed: str, **kwargs: Any) -> None:
-        await self._async_command({protocol.DP_SUCTION: fan_speed})
+        speed = next((s for s in protocol.FAN_SPEEDS if s.lower() == fan_speed.lower()), None)
+        if speed is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="unknown_fan_speed",
+                translation_placeholders={"fan_speed": fan_speed, "known": ", ".join(self.fan_speed_list)},
+            )
+        await self._async_command({protocol.DP_SUCTION: speed})
 
     async def async_get_segments(self) -> list[Segment]:
         return [Segment(id=str(room_id), name=name) for room_id, name in self.coordinator.room_names().items()]

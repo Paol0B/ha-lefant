@@ -45,7 +45,7 @@
               "gentle": "Quiet",
               "normal": "Standard",
               "strong": "Strong",
-              "superStrong": "Max"
+              "superstrong": "Max"
             }
           }
         }
@@ -155,6 +155,9 @@
     },
     "unknown_command": {
       "message": "Unknown command {command}. Supported: clean_rooms, set_dp"
+    },
+    "unknown_fan_speed": {
+      "message": "Unknown fan speed {fan_speed}. Supported: {known}"
     }
   }
 }
