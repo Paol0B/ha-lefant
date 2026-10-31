@@ -79,11 +79,12 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # map edits shown as a preview on top of the cleaning record they were made on, kept across restarts
         self._edits: list[dict[str, Any]] = []
         self._edits_store: Store[dict[str, Any]] = Store(hass, 1, f"{DOMAIN}.{config_entry.entry_id}.map_edits")
-        # running cleaning: scope ("house", "rooms" started from HA, "other" started elsewhere), rooms,
+        # running cleaning: scope ("house", "rooms" started from HA, "other" started elsewhere), rooms in the
+        # order sent (the robot cleans them in that order) and passes,
         # start time and mop washes so far; kept across restarts
         self.job: dict[str, Any] | None = None
         self._job_store: Store[dict[str, Any]] = Store(hass, 1, f"{DOMAIN}.{config_entry.entry_id}.job")
-        self._requested: tuple[list[int] | None, float] | None = None
+        self._requested: tuple[list[int] | None, int, float] | None = None
 
     async def _async_update_data(self) -> dict[str, Any]:
         return self.data or {}
@@ -174,9 +175,9 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.usage.update(stored)
         self.job = (await self._job_store.async_load() or {}).get("job")
 
-    def note_request(self, rooms: list[int] | None) -> None:
-        """Rooms of a cleaning started from HA (None: whole house), matched when the robot starts."""
-        self._requested = (rooms, time.monotonic())
+    def note_request(self, rooms: list[int] | None, repeats: int = 1) -> None:
+        """Rooms and passes of a cleaning started from HA (None: whole house), matched when the robot starts."""
+        self._requested = (rooms, repeats, time.monotonic())
 
     def _track_job(self, previous: str | None, data: dict[str, Any]) -> None:
         current = data.get(protocol.DP_STATUS)
@@ -185,11 +186,11 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         job = self.job
         if job is None and current in protocol.CLEANING_STATUSES:
             requested = self._requested
-            if requested and time.monotonic() - requested[1] > REQUEST_WINDOW:
+            if requested and time.monotonic() - requested[2] > REQUEST_WINDOW:
                 requested = None
             self._requested = None
             if requested and requested[0]:
-                job = {"scope": "rooms", "rooms": requested[0]}
+                job = {"scope": "rooms", "rooms": requested[0], "repeats": requested[1]}
             elif requested or data.get(protocol.DP_MODE) == "smart":
                 job = {"scope": "house", "rooms": []}
             else:

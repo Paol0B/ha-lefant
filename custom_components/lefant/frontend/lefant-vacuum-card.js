@@ -154,7 +154,11 @@ export const STRINGS = {
     whole_house: "Whole house",
     job_other: "Rooms chosen in the Lefant app or by a schedule",
     job_hint: "The robot does not report which room it is in right now.",
+    job_estimate_hint: "Estimate: the robot does not report where it is. It cleans the rooms in the order chosen, so the card compares the m² cleaned with the area of each room.",
+    job_room: { done: "done", current: "in progress", todo: "to do" },
+    estimated_room: "probably {room}",
     map_note: "Map saved from the last full cleaning. Tap the rooms to clean.",
+    map_note_job: "Rooms with a tick: done. Blinking room: in progress, estimated. The route appears when the cleaning ends.",
     map_note_edited: "Map saved from the last full cleaning, with the changes in preview. Tap the rooms to clean.",
     docked: "Docked",
     mop_on: "Mop attached",
@@ -409,7 +413,11 @@ export const STRINGS = {
     whole_house: "Tutta la casa",
     job_other: "Stanze scelte dall'app Lefant o da una programmazione",
     job_hint: "Il robot non comunica in quale stanza si trova in questo momento.",
+    job_estimate_hint: "Stima: il robot non comunica dove si trova. Pulisce le stanze nell'ordine scelto, quindi la scheda confronta i m² puliti con l'area di ogni stanza.",
+    job_room: { done: "fatta", current: "in corso", todo: "da fare" },
+    estimated_room: "probabilmente {room}",
     map_note: "Mappa salvata dall'ultima pulizia completa. Tocca le stanze da pulire.",
+    map_note_job: "Stanze con la spunta: fatte. Stanza che lampeggia: in corso, stimata. Il percorso compare a fine pulizia.",
     map_note_edited: "Mappa salvata dall'ultima pulizia completa, con le modifiche in anteprima. Tocca le stanze da pulire.",
     docked: "Sulla base",
     mop_on: "Mop montato",
@@ -515,6 +523,23 @@ export function translate(lang, key, vars = {}) {
   const text = key?.split(".").reduce((node, part) => node?.[part], STRINGS[lang]);
   return typeof text === "string" ? text.replace(/\{(\w+)\}/g, (m, name) => vars[name] ?? m) : text;
 }
+
+// The robot does not report where it is. It cleans the rooms one after another in the order sent and
+// the area it counts matches the map area of those rooms within 5-10 %, so the room in progress is the
+// first one whose running total of map areas the counter has not reached. The last room stays in
+// progress until the cleaning ends. Null when a room has no map area.
+export function roomProgress(order, areas, cleaned, repeats = 1) {
+  if (!order?.length || !(cleaned >= 0) || order.some((id) => !(areas[id] > 0))) return null;
+  let total = 0;
+  let current = -1;
+  return order.map((id, i) => {
+    total += areas[id] * repeats;
+    if (current < 0 && (cleaned < total || i === order.length - 1)) current = i;
+    return { id, state: current < 0 ? "done" : current === i ? "current" : "todo" };
+  });
+}
+
+const JOB_ROOM_ICONS = { done: "mdi:check-circle", current: "mdi:robot-vacuum", todo: "mdi:circle-outline" };
 
 // the card picker and setConfig run before the card gets hass
 const pageLang = () => langOf(document.querySelector("home-assistant")?.hass);
@@ -960,8 +985,15 @@ class LefantVacuumCard extends HTMLElement {
     const names = Object.fromEntries((this._data?.rooms || []).map((r) => [r.id, r.name]));
     const scope = job.scope === "rooms" ? this._t("job_rooms", { rooms: job.rooms.map((id) => names[id] || this._t("room", { id })).join(", ") })
       : job.scope === "house" ? this._t("whole_house") : this._t("job_other");
-    return { scope, started: job.started, washes: job.mop_washes, where: null,
-      hint: this._t("job_hint") };
+    const areas = Object.fromEntries((this._data?.rooms || []).map((r) => [r.id, r.area]));
+    const progress = job.scope === "rooms"
+      ? roomProgress(job.rooms, areas, Number(this._state("cleaning_area")?.state), job.repeats || 1)
+        ?.map((p) => ({ ...p, name: names[p.id] || this._t("room", { id: p.id }) }))
+      : null;
+    const current = progress?.find((p) => p.state === "current");
+    return { scope, started: job.started, washes: job.mop_washes, progress,
+      where: current ? this._t("estimated_room", { room: current.name }) : null,
+      hint: this._t(progress ? "job_estimate_hint" : "job_hint") };
   }
 
   _docked() {
@@ -986,6 +1018,7 @@ class LefantVacuumCard extends HTMLElement {
   }
 
   _mapNote() {
+    if (this._jobInfo(this._state("vacuum"))?.progress) return this._t("map_note_job");
     return this._data.map_edited ? this._t("map_note_edited") : this._t("map_note");
   }
 
@@ -1012,16 +1045,22 @@ class LefantVacuumCard extends HTMLElement {
     const ed = this._ed;
     const picked = ed ? ed.pick : this._selected;
     const sel = new Set(picked);
+    // the running cleaning: no route yet, rooms done and in progress estimated while nothing is selected
+    const job = ed ? null : this._jobInfo(this._state("vacuum"));
+    const progress = sel.size ? null : job?.progress;
+    const step = Object.fromEntries((progress || []).map((p, i) => [p.id, { state: p.state, order: i }]));
     const roomPaths = rooms.filter((r) => r.path).map((r) => {
       const order = picked.indexOf(r.id);
       const color = ROOM_COLORS[r.id % ROOM_COLORS.length];
-      return `<path class="room ${order >= 0 ? "selected" : ""}" data-action="room" data-value="${r.id}" d="${r.path}" style="--room:${color}"><title>${esc(r.name)}</title></path>`;
+      return `<path class="room ${order >= 0 ? "selected" : ""} ${step[r.id]?.state || ""}" data-action="room" data-value="${r.id}" d="${r.path}" style="--room:${color}"><title>${esc(r.name)}</title></path>`;
     }).join("");
     const labels = rooms.filter((r) => r.label).map((r) => {
       const order = ed ? -1 : this._selected.indexOf(r.id);
       const [x, y] = r.label;
+      const s = step[r.id];
       const badge = order >= 0
         ? `<circle cx="${x}" cy="${y - 13}" r="6.5" class="badge"/><text x="${x}" y="${y - 10.6}" class="badge-text">${order + 1}</text>`
+        : s ? `<circle cx="${x}" cy="${y - 13}" r="6.5" class="badge ${s.state}"/><text x="${x}" y="${y - 10.6}" class="badge-text">${s.state === "done" ? "✓" : s.order + 1}</text>`
         : "";
       return `<g class="label" data-action="room" data-value="${r.id}">${badge}<text x="${x}" y="${y}" class="room-name">${esc(r.name)}</text><text x="${x}" y="${y + 9}" class="room-area">${r.area} m²</text></g>`;
     }).join("");
@@ -1036,7 +1075,7 @@ class LefantVacuumCard extends HTMLElement {
     const note = ed ? this._editContext()
       : `<div class="map-note">${esc(this._mapNote())}</div>`;
     return `
-      <div class="map ${!ed && sel.size ? "has-selection" : ""} ${ed ? `editing tool-${ed.tool}` : ""}">
+      <div class="map ${!ed && sel.size ? "has-selection" : ""} ${progress ? "job" : ""} ${ed ? `editing tool-${ed.tool}` : ""}">
         ${ed ? tools : ""}
         <div class="canvas">
           <svg viewBox="${vb.join(" ")}" preserveAspectRatio="xMidYMid meet">
@@ -1045,7 +1084,7 @@ class LefantVacuumCard extends HTMLElement {
               ${roomPaths}
             </g>
             <path class="walls" d="${map.walls}"/>
-            ${this._showRoute && map.route && !ed ? `<path class="route" d="${map.route}"/>` : ""}
+            ${this._showRoute && map.route && !ed && !job ? `<path class="route" d="${map.route}"/>` : ""}
             <g class="dock"><circle cx="${dx}" cy="${dy}" r="6"/><path d="M${dx - 3} ${dy + 2.5}v-3l3-2.5 3 2.5v3z"/></g>
             ${map.robot ? `<g class="bot"><circle cx="${map.robot[0]}" cy="${map.robot[1]}" r="5"/><circle cx="${map.robot[0]}" cy="${map.robot[1]}" r="2"/></g>` : ""}
             <g class="fit-labels">${labels}</g>
@@ -1667,7 +1706,8 @@ class LefantVacuumCard extends HTMLElement {
       <div class="panel now">
         <div class="panel-title">${job ? this._t("cleaning_now") : this._t("cleaning")}<span class="muted">${since}</span></div>
         <div class="phase"><ha-icon icon="${icon}"></ha-icon><span class="text"><b>${esc(text)}</b>${detail ? `<span class="muted">${esc(detail)}</span>` : ""}</span></div>
-        ${job?.scope ? `<div class="scope"><ha-icon icon="mdi:floor-plan"></ha-icon>${esc(job.scope)}</div>` : ""}
+        ${job?.progress ? `<div class="job-rooms">${job.progress.map((p) => `<span class="job-room ${p.state}"><ha-icon icon="${JOB_ROOM_ICONS[p.state]}"></ha-icon>${esc(p.name)}<span class="muted">${this._t(`job_room.${p.state}`)}</span></span>`).join("")}</div>`
+          : job?.scope ? `<div class="scope"><ha-icon icon="mdi:floor-plan"></ha-icon>${esc(job.scope)}</div>` : ""}
         <div class="stats">
           <div><ha-icon icon="mdi:timer-outline"></ha-icon><b>${isNaN(t) ? "-" : Math.round(t)}</b> min</div>
           <div><ha-icon icon="mdi:texture-box"></ha-icon><b>${isNaN(a) ? "-" : Math.round(a)}</b> m²</div>
@@ -2117,6 +2157,12 @@ const STYLE = `
   .room:hover { fill-opacity: 0.75; }
   .has-selection .room { fill-opacity: 0.22; }
   .room.selected, .has-selection .room.selected { fill: var(--primary-color); fill-opacity: 0.7; }
+  .job .room { fill-opacity: 0.18; }
+  .job .room.todo { fill-opacity: 0.5; }
+  .job .room.done { fill: var(--success-color, #2ea043); fill-opacity: 0.45; }
+  .job .room.current { fill: var(--info-color, #039be5); animation: room-now 2s ease-in-out infinite; }
+  @keyframes room-now { 0%, 100% { fill-opacity: 0.3; } 50% { fill-opacity: 0.75; } }
+  @media (prefers-reduced-motion: reduce) { .job .room.current { animation: none; fill-opacity: 0.6; } }
   ha-card:not(.wide) .room-name { font-size: 11px; }
   ha-card:not(.wide) .room-area { display: none; }
   .route { fill: none; stroke: var(--primary-color); stroke-width: 0.7; stroke-linejoin: round; opacity: 0.8; pointer-events: none; }
@@ -2129,6 +2175,9 @@ const STYLE = `
   .room-name { font-size: 8.5px; font-weight: 600; fill: var(--primary-text-color); }
   .room-area { font-size: 6.5px; fill: var(--secondary-text-color); }
   .badge { fill: var(--primary-color); }
+  .badge.done { fill: var(--success-color, #2ea043); }
+  .badge.current { fill: var(--info-color, #039be5); }
+  .badge.todo { fill: var(--secondary-text-color); }
   .label text.badge-text { font-size: 7px; font-weight: 700; fill: var(--text-primary-color, #fff); stroke: none; }
   .map-tools { position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; }
   .map-note { font-size: 12px; color: var(--secondary-text-color); padding: 4px 6px 0; }
@@ -2170,6 +2219,14 @@ const STYLE = `
   .phase ha-icon { color: var(--primary-color); }
   .phase .text { display: grid; font-size: 15px; }
   .scope { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--primary-text-color); --mdc-icon-size: 18px; }
+  .job-rooms { display: flex; flex-wrap: wrap; gap: 6px; }
+  .job-room { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; font-size: 13px;
+    border: 1px solid var(--divider-color); color: var(--primary-text-color); --mdc-icon-size: 16px; }
+  .job-room .muted { font-size: 11px; }
+  .job-room.done ha-icon { color: var(--success-color, #2ea043); }
+  .job-room.current { border-color: var(--info-color, #039be5); background: color-mix(in srgb, var(--info-color, #039be5) 14%, transparent); }
+  .job-room.current ha-icon { color: var(--info-color, #039be5); }
+  .job-room.todo { color: var(--secondary-text-color); }
   .bar { display: block; height: 4px; border-radius: 2px; margin-top: 4px; background: color-mix(in srgb, var(--primary-text-color) 10%, transparent); overflow: hidden; }
   .bar > span { display: block; height: 100%; background: var(--primary-color); }
   .bar.low > span { background: var(--warning-color); }

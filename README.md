@@ -60,7 +60,7 @@ To rename rooms, open the integration's **Configure** dialog. Names stay in Home
 The integration serves the card, but Home Assistant needs it as a dashboard resource:
 
 1. **Settings > Dashboards**, menu **Resources** (it needs advanced mode in your user profile).
-2. Add `/lefant_static/lefant-vacuum-card.js?v=0.6.0` as **JavaScript module**.
+2. Add `/lefant_static/lefant-vacuum-card.js?v=0.6.1` as **JavaScript module**.
 3. Add the card to a dashboard:
 
 ```yaml
@@ -86,7 +86,7 @@ For a Roborock robot, use `type: custom:roborock-vacuum-card` with the Roborock 
 | button | main brush, side brush, filter, mop pads, dust bag replaced |
 | image (cloud) | last cleaning map |
 
-The vacuum attribute `cleaning_job` describes the running cleaning: whole house or rooms, start time and mop washes.
+The vacuum attribute `cleaning_job` describes the running cleaning: whole house or rooms in the order sent, passes, start time and mop washes.
 
 ## Commands
 
@@ -131,7 +131,7 @@ actions:
 
 ## Known limits
 
-- The robot does not report its live position or the room it is in.
+- The robot does not report its live position or the room it is in. During a room cleaning started from Home Assistant the card estimates the rooms done and the room in progress from the area cleaned.
 - The map shows the last finished cleaning. The robot sends it to the Tuya cloud a few minutes after docking, and the integration fetches it then.
 - After a room split or merge, the map shows a preview until the next cleaning brings the robot's own map.
 - Map edits work only while the robot is not cleaning.

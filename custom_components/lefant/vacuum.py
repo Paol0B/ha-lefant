@@ -120,7 +120,7 @@ class LefantVacuum(LefantEntity, StateVacuumEntity):
                 translation_key="unknown_rooms",
                 translation_placeholders={"rooms": ", ".join(map(str, room_ids)), "known": ", ".join(map(str, known))},
             )
-        self.coordinator.note_request(room_ids)
+        self.coordinator.note_request(room_ids, repeats)
         await self._async_command({protocol.DP_COMMAND: protocol.room_clean_command(room_ids, repeats)})
 
     async def async_send_command(

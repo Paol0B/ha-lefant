@@ -9,7 +9,7 @@ globalThis.customElements = { get: () => undefined, define: () => {} };
 globalThis.window = globalThis;
 globalThis.document = { querySelector: () => null };
 
-const { STRINGS, langOf, translate } = await import(cardUrl);
+const { STRINGS, langOf, roomProgress, translate } = await import(cardUrl);
 
 test("Italian for it and it-IT, English for any other language", () => {
   const lang = (language) => langOf({ locale: { language } });
@@ -42,5 +42,22 @@ test("every key the card uses exists in both languages", () => {
   assert.ok(direct.length > 100 && columns.length > 50);
   for (const key of [...direct, ...columns]) {
     for (const lang of ["en", "it"]) assert.notEqual(translate(lang, key), undefined, `${lang}: ${key}`);
+  }
+});
+
+test("room in progress estimated from the area cleaned, in the order sent", () => {
+  const areas = { 1: 15, 2: 8, 3: 4, 4: 16 };
+  const states = (cleaned, repeats) => roomProgress([1, 2, 3, 4], areas, cleaned, repeats).map((p) => p.state);
+  assert.deepEqual(states(0), ["current", "todo", "todo", "todo"]);
+  assert.deepEqual(states(14), ["current", "todo", "todo", "todo"]);
+  assert.deepEqual(states(20), ["done", "current", "todo", "todo"]);
+  assert.deepEqual(states(28), ["done", "done", "done", "current"]);
+  assert.deepEqual(states(60), ["done", "done", "done", "current"]);
+  assert.deepEqual(states(20, 2), ["current", "todo", "todo", "todo"]);
+  assert.equal(roomProgress([1, 5], areas, 10), null);
+  assert.equal(roomProgress([1], areas, NaN), null);
+  for (const lang of ["en", "it"]) {
+    for (const state of ["done", "current", "todo"]) assert.notEqual(translate(lang, `job_room.${state}`), undefined);
+    for (const key of ["job_estimate_hint", "estimated_room", "map_note_job"]) assert.notEqual(translate(lang, key), undefined);
   }
 });

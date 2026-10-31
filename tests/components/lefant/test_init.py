@@ -105,14 +105,14 @@ async def test_cleaning_job(hass: HomeAssistant, entry: MockConfigEntry, fake_de
     device = fake_device[0]
     await hass.services.async_call(
         "vacuum", "send_command",
-        {"entity_id": VACUUM, "command": "clean_rooms", "params": {"rooms": [1]}},
+        {"entity_id": VACUUM, "command": "clean_rooms", "params": {"rooms": [1], "repeats": 2}},
         blocking=True,
     )
     device.on_dps({protocol.DP_STATUS: "part_clean"})
     device.on_dps({protocol.DP_STATUS: "wash_mop"})
     await hass.async_block_till_done()
     job = hass.states.get(VACUUM).attributes["cleaning_job"]
-    assert (job["scope"], job["rooms"], job["mop_washes"]) == ("rooms", [1], 1)
+    assert (job["scope"], job["rooms"], job["repeats"], job["mop_washes"]) == ("rooms", [1], 2, 1)
     assert hass.states.get(VACUUM).state == "cleaning"
 
     device.on_dps({protocol.DP_STATUS: "goto_charge"})
