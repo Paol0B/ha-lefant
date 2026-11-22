@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import EVENT_HOMEASSISTANT_FINAL_WRITE
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.util import dt as dt_util
@@ -355,3 +356,24 @@ async def test_options_flow(hass: HomeAssistant, entry: MockConfigEntry) -> None
     assert result["data"] == {"room_names": {"1": "Laundry"}}
     await hass.async_block_till_done()
     assert entry.runtime_data.room_names() == {1: "Laundry", 2: "Hall"}
+
+
+async def test_dp_journal(hass: HomeAssistant, entry: MockConfigEntry, fake_device: list[FakeDevice]) -> None:
+    device = fake_device[0]
+    clear = protocol.encode(b"\x01" + bytes(6))
+    _feed(
+        device,
+        {protocol.DP_STATUS: "relocating", protocol.DP_BASE_STATE: clear, "160": "qgADAQABBQ==", protocol.DP_CLEAN_TIME: 3},
+        {"160": "qgADAQABBQ=="},
+    )
+    values = {(e["dp"], e["value"]): e for e in entry.runtime_data._journal.values()}
+    # also the dock reading dropped away from the dock, with what the robot was doing
+    assert values[(protocol.DP_BASE_STATE, clear)]["status"] == "relocating"
+    assert values[("160", "qgADAQABBQ==")]["count"] == 2
+    assert not {protocol.DP_STATUS, protocol.DP_CLEAN_TIME} & {dp for dp, _ in values}
+
+    hass.bus.async_fire(EVENT_HOMEASSISTANT_FINAL_WRITE)
+    await hass.async_block_till_done()
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert ("160", "qgADAQABBQ==") in {(e["dp"], e["value"]) for e in entry.runtime_data._journal.values()}

@@ -61,7 +61,7 @@ To rename rooms, open the integration's **Configure** dialog. Names stay in Home
 The integration serves the card, but Home Assistant needs it as a dashboard resource:
 
 1. **Settings > Dashboards**, menu **Resources** (it needs advanced mode in your user profile).
-2. Add `/lefant_static/lefant-vacuum-card.js?v=0.8.1` as **JavaScript module**.
+2. Add `/lefant_static/lefant-vacuum-card.js?v=0.8.2` as **JavaScript module**.
 3. Add the card to a dashboard:
 
 ```yaml
@@ -156,6 +156,7 @@ actions:
 
 - **Cannot connect**: check host, local key and protocol version, and that port 6668 is reachable. Close other tools that keep a local connection to the robot.
 - **No map**: the map needs a cloud project and one finished cleaning. Check the Tuya console: the cloud project must be linked to the app account and its API services enabled.
+- **Unknown signals**: the integration keeps every value the robot sends for the DPs it does not read (dock state, alarm codes and the rest), with when it first and last came and what the robot was doing, in `.storage/lefant.<entry id>.dp_journal`.
 
 Debug logs:
 

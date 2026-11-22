@@ -44,6 +44,12 @@ BASE_SETTLE = 15
 REQUEST_WINDOW = 120
 # pushed only on some events (room list, no-go areas, base alerts): saved so that HA starts with them without the cloud
 SAVED_DPS = (protocol.DP_ROOMS, protocol.DP_AREAS, protocol.DP_BASE_STATE)
+# DPs left out of the journal: counters that change every minute, maps and command frames
+JOURNAL_SKIP = frozenset({
+    protocol.DP_STATUS, protocol.DP_CLEAN_TIME, protocol.DP_CLEAN_AREA, protocol.DP_BATTERY,
+    protocol.DP_AREAS, protocol.DP_COMMAND, protocol.DP_ROOMS, protocol.DP_MAC,
+})
+JOURNAL_MAX = 1000
 
 type LefantConfigEntry = ConfigEntry[LefantCoordinator]
 
@@ -109,6 +115,11 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._fresh_until = 0.0
         self._status_since = time.monotonic()
         self._job_store: Store[dict[str, Any]] = Store(hass, 1, f"{DOMAIN}.{config_entry.entry_id}.job")
+        # every value seen of each DP, with first and last time and what the robot was doing: to decode
+        # signals the integration does not read yet (dock alerts, alarm codes, water)
+        self._journal: dict[str, dict[str, Any]] = {}
+        self._journal_pending = False
+        self._journal_store: Store[dict[str, Any]] = Store(hass, 1, f"{DOMAIN}.{config_entry.entry_id}.dp_journal")
         self._requested: tuple[list[int] | None, int, float] | None = None
         # last cleaning record, values of SAVED_DPS and last cleaning: HA starts with them also when the cloud
         # does not answer
@@ -197,6 +208,7 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     @callback
     def async_handle_dps(self, dps: dict[str, Any]) -> None:
         previous = self.status
+        self._note_values(dps, {**(self.data or {}), **dps})
         was_docked = (self.data or {}).get(protocol.DP_ON_DOCK)
         if protocol.DP_BASE_STATE in dps and not self._at_base({**(self.data or {}), **dps}):
             # keep what the base said last
@@ -214,10 +226,6 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._rooms_changed.set()
         for value in dps.values():
             self._handle_frame(protocol.parse_frame(value))
-        if flags := protocol.parse_base_state(dps.get(protocol.DP_BASE_STATE)):
-            unknown = [i for i, flag in enumerate(flags) if flag and i not in protocol.BASE_FLAGS.values()]
-            if unknown:
-                _LOGGER.info("Unknown base station alert, bytes %s: %s", unknown, flags.hex(" "))
         if saved := {k: v for k, v in dps.items() if k in SAVED_DPS and v}:
             self._saved_dps.update(saved)
             self._pushed.update(saved)
@@ -244,6 +252,31 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
         if (future := self._reports.pop(cmd, None)) and not future.done():
             future.set_result(data)
+
+    def _note_values(self, dps: dict[str, Any], data: dict[str, Any]) -> None:
+        now = dt_util.utcnow().isoformat()
+        new = seen = False
+        for dp, value in dps.items():
+            if dp in JOURNAL_SKIP:
+                continue
+            if entry := self._journal.get(key := f"{dp}|{value!r}"):
+                entry["last"] = now
+                entry["count"] += 1
+                seen = True
+            elif len(self._journal) < JOURNAL_MAX:
+                self._journal[key] = {
+                    "dp": dp, "value": value, "first": now, "last": now, "count": 1,
+                    "status": data.get(protocol.DP_STATUS), "docked": data.get(protocol.DP_ON_DOCK),
+                }
+                new = True
+        # a new save would put off the one pending: only a new value brings it forward
+        if new or (seen and not self._journal_pending):
+            self._journal_pending = True
+            self._journal_store.async_delay_save(self._journal_data, 10 if new else 300)
+
+    def _journal_data(self) -> dict[str, Any]:
+        self._journal_pending = False
+        return {"values": list(self._journal.values())}
 
     @staticmethod
     def _at_base(data: dict[str, Any]) -> bool:
@@ -274,6 +307,8 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def async_load_usage(self) -> None:
         if stored := await self._usage_store.async_load():
             self.usage.update(stored)
+        journal = await self._journal_store.async_load() or {}
+        self._journal = {f"{e['dp']}|{e['value']!r}": e for e in journal.get("values", [])}
         stored_job = await self._job_store.async_load() or {}
         self.job = stored_job.get("job")
         if last_job := stored_job.get("last_job"):
