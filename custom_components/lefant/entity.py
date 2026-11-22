@@ -29,7 +29,7 @@ class LefantEntity(CoordinatorEntity[LefantCoordinator]):
 
     @property
     def available(self) -> bool:
-        return self.coordinator.connected
+        return self.coordinator.available
 
     def dp(self, key: str) -> Any:
         return (self.coordinator.data or {}).get(key)

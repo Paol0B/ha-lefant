@@ -45,6 +45,8 @@ PAUSED_STATUSES = frozenset({
     "paused", "recharing_paused", "fastmaping_paused", "wash_paused", "relocating_pause",
 })
 RETURNING_STATUSES = frozenset({"goto_charge", "relocating_recharge"})
+# paused for a while the robot falls asleep; stopped it stands by
+HELD_STATUSES = frozenset({"sleep", "standby"})
 DOCKED_STATUSES = frozenset({
     "charging", "charge_done", "drying", "dust_collection", "continuity_clear_charging",
 })

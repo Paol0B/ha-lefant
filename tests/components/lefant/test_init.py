@@ -1,14 +1,17 @@
+from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 
 from custom_components.lefant import protocol
 from custom_components.lefant.const import DOMAIN
+from custom_components.lefant.coordinator import DOCK_PAUSE
 
 from . import DEVICE_ID, ENTRY_DATA, FakeDevice
 
@@ -154,10 +157,152 @@ async def test_fault(hass: HomeAssistant, entry: MockConfigEntry, fake_device: l
     assert hass.states.get("binary_sensor.lefant_m5_max_problem").state == "on"
 
 
-async def test_unavailable_when_disconnected(hass: HomeAssistant, entry: MockConfigEntry, fake_device: list[FakeDevice]) -> None:
+async def test_unavailable_after_a_long_disconnection(
+    hass: HomeAssistant, entry: MockConfigEntry, fake_device: list[FakeDevice]
+) -> None:
     fake_device[0].on_connection(False)
     await hass.async_block_till_done()
+    state = hass.states.get(VACUUM)
+    assert state.state == "docked"
+    assert state.attributes["connected"] is False
+    assert state.attributes["offline_since"]
+
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=11))
+    await hass.async_block_till_done()
     assert hass.states.get(VACUUM).state == "unavailable"
+
+    fake_device[0].on_connection(True)
+    await hass.async_block_till_done()
+    state = hass.states.get(VACUUM)
+    assert state.state == "docked"
+    assert (state.attributes["connected"], state.attributes["offline_since"]) == (True, None)
+
+
+async def test_disconnection_after_unload(hass: HomeAssistant, entry: MockConfigEntry, fake_device: list[FakeDevice]) -> None:
+    coordinator = entry.runtime_data
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    # the device thread reports the disconnection once stopped: no timer is left behind
+    fake_device[0].on_connection(False)
+    await hass.async_block_till_done()
+    assert coordinator._offline_timer is None
+
+
+def _feed(device: FakeDevice, *pushes: dict) -> None:
+    for dps in pushes:
+        device.on_dps(dps)
+
+
+async def test_job_goes_on_after_a_pause(hass: HomeAssistant, entry: MockConfigEntry, fake_device: list[FakeDevice]) -> None:
+    """Paused away from the dock the robot falls asleep, then goes on with the same rooms."""
+    device = fake_device[0]
+    s, t, dock = protocol.DP_STATUS, protocol.DP_CLEAN_TIME, protocol.DP_ON_DOCK
+    await hass.services.async_call(
+        "vacuum", "send_command",
+        {"entity_id": VACUUM, "command": "clean_rooms", "params": {"rooms": [2, 1]}},
+        blocking=True,
+    )
+    _feed(
+        device,
+        {s: "relocating", t: 0}, {s: "wash_mop"}, {s: "charging"}, {s: "relocating"}, {dock: False},
+        {s: "smart", t: 1}, {s: "goto_wash"}, {s: "charging", dock: True},
+    )
+    await hass.async_block_till_done()
+    # charging between two mop washes: still cleaning
+    assert hass.states.get(VACUUM).state == "cleaning"
+    _feed(device, {s: "wash_mop"}, {s: "paused", dock: False}, {s: "sleep"})
+    await hass.async_block_till_done()
+    state = hass.states.get(VACUUM)
+    assert state.state == "paused"
+    started = state.attributes["cleaning_job"]["started"]
+    assert state.attributes["cleaning_job"]["rooms"] == [2, 1]
+
+    # the connection drops, the robot is carried back to the dock and goes on from there
+    device.on_connection(False)
+    device.on_connection(True)
+    _feed(
+        device,
+        {s: "sleep", dock: True}, {s: "paused"}, {s: "charging"}, {s: "wash_mop"}, {s: "charging"},
+        {s: "smart", dock: False}, {t: 2},
+    )
+    await hass.async_block_till_done()
+    job = hass.states.get(VACUUM).attributes["cleaning_job"]
+    assert (job["scope"], job["rooms"], job["started"], job["mop_washes"]) == ("rooms", [2, 1], started, 2)
+
+    # the mop wash after the robot is home is no new cleaning
+    _feed(device, {s: "goto_charge"}, {s: "charging", dock: True}, {s: "wash_mop"})
+    await hass.async_block_till_done()
+    assert hass.states.get(VACUUM).attributes["cleaning_job"] is None
+    _feed(device, {s: "drying"})
+    await hass.async_block_till_done()
+    assert hass.states.get(VACUUM).state == "docked"
+    assert hass.states.get(VACUUM).attributes["cleaning_job"] is None
+    assert hass.states.get("sensor.lefant_m5_max_last_cleaning").attributes["rooms"] == ["Hall", "Kitchen"]
+
+
+@pytest.mark.parametrize("same_push", [True, False])
+async def test_new_count_is_a_new_cleaning(
+    hass: HomeAssistant, entry: MockConfigEntry, fake_device: list[FakeDevice], same_push: bool
+) -> None:
+    device = fake_device[0]
+    s, t = protocol.DP_STATUS, protocol.DP_CLEAN_TIME
+    await hass.services.async_call(
+        "vacuum", "send_command",
+        {"entity_id": VACUUM, "command": "clean_rooms", "params": {"rooms": [1]}},
+        blocking=True,
+    )
+    _feed(device, {s: "smart", t: 0}, {t: 30}, {s: "goto_charge"}, {s: "charging"})
+    # started from the robot's app: the minute counter starts again with the status or right after it
+    if same_push:
+        _feed(device, {s: "relocating", t: 0})
+    else:
+        _feed(device, {s: "relocating"}, {t: 0})
+    await hass.async_block_till_done()
+    job = hass.states.get(VACUUM).attributes["cleaning_job"]
+    assert (job["scope"], job["rooms"]) == ("house", [])
+
+
+async def test_long_charging_ends_the_job(hass: HomeAssistant, entry: MockConfigEntry, fake_device: list[FakeDevice]) -> None:
+    device = fake_device[0]
+    s = protocol.DP_STATUS
+    _feed(device, {s: "smart", protocol.DP_ON_DOCK: False}, {s: "goto_wash"}, {s: "charging", protocol.DP_ON_DOCK: True})
+    await hass.async_block_till_done()
+    assert hass.states.get(VACUUM).attributes["cleaning_job"] is not None
+    entry.runtime_data._status_since -= DOCK_PAUSE + 1
+    device.on_dps({protocol.DP_BATTERY: 90})
+    await hass.async_block_till_done()
+    assert hass.states.get(VACUUM).attributes["cleaning_job"] is None
+    assert hass.states.get(VACUUM).state == "docked"
+
+
+async def test_resume_and_stop_an_asleep_job(hass: HomeAssistant, entry: MockConfigEntry, fake_device: list[FakeDevice]) -> None:
+    device = fake_device[0]
+    s = protocol.DP_STATUS
+    _feed(device, {s: "smart", protocol.DP_ON_DOCK: False}, {s: "paused"}, {s: "sleep"})
+    await hass.services.async_call("vacuum", "start", {"entity_id": VACUUM}, blocking=True)
+    assert device.sent == [{protocol.DP_PAUSE: False}]
+
+    await hass.services.async_call("vacuum", "stop", {"entity_id": VACUUM}, blocking=True)
+    await hass.async_block_till_done()
+    assert hass.states.get(VACUUM).attributes["cleaning_job"] is None
+    assert hass.states.get(VACUUM).state == "idle"
+
+
+async def test_base_alerts_kept_away_from_the_dock(
+    hass: HomeAssistant, entry: MockConfigEntry, fake_device: list[FakeDevice]
+) -> None:
+    device = fake_device[0]
+    bag, clear = protocol.encode(b"\x01\x00\x00\x00\x01\x00\x00"), protocol.encode(b"\x01" + bytes(6))
+    sensor = "binary_sensor.lefant_m5_max_dust_bag"
+    device.on_dps({protocol.DP_BASE_STATE: bag})
+    await hass.async_block_till_done()
+    assert hass.states.get(sensor).state == "on"
+    # leaving the dock the robot reports all clear before it loses the dock contact
+    _feed(device, {protocol.DP_STATUS: "relocating", protocol.DP_BASE_STATE: clear}, {protocol.DP_ON_DOCK: False})
+    await hass.async_block_till_done()
+    assert hass.states.get(sensor).state == "on"
+    _feed(device, {protocol.DP_STATUS: "charging", protocol.DP_ON_DOCK: True}, {protocol.DP_BASE_STATE: clear})
+    await hass.async_block_till_done()
+    assert hass.states.get(sensor).state == "off"
 
 
 async def test_ws_map(hass: HomeAssistant, entry: MockConfigEntry, hass_ws_client: WebSocketGenerator) -> None:

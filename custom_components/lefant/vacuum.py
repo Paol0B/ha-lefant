@@ -60,6 +60,9 @@ class LefantVacuum(LefantEntity, StateVacuumEntity):
             return VacuumActivity.PAUSED
         if status in protocol.RETURNING_STATUSES:
             return VacuumActivity.RETURNING
+        if self.coordinator.job is not None:
+            # asleep away from the dock after a pause, or charging at the dock between two mop washes
+            return VacuumActivity.PAUSED if status in protocol.HELD_STATUSES else VacuumActivity.CLEANING
         if status in protocol.DOCKED_STATUSES or self.dp(protocol.DP_ON_DOCK):
             return VacuumActivity.DOCKED
         return VacuumActivity.IDLE
@@ -75,10 +78,14 @@ class LefantVacuum(LefantEntity, StateVacuumEntity):
             "status": self.dp(protocol.DP_STATUS),
             "mode": self.dp(protocol.DP_MODE),
             "cleaning_job": self.coordinator.job,
+            "connected": self.coordinator.connected,
+            "offline_since": since.isoformat() if (since := self.coordinator.offline_since) else None,
         }
 
     async def async_start(self) -> None:
-        if self.dp(protocol.DP_STATUS) in protocol.PAUSED_STATUSES:
+        status = self.dp(protocol.DP_STATUS)
+        # asleep after a pause the robot still has a cleaning to finish: resume it, do not start the whole house
+        if status in protocol.PAUSED_STATUSES or (self.coordinator.job and status in protocol.HELD_STATUSES):
             await self._async_command({protocol.DP_PAUSE: False})
         else:
             self.coordinator.note_request(None)
@@ -89,6 +96,7 @@ class LefantVacuum(LefantEntity, StateVacuumEntity):
 
     async def async_stop(self, **kwargs: Any) -> None:
         await self._async_command({protocol.DP_SWITCH_GO: False})
+        self.coordinator.end_job()
 
     async def async_return_to_base(self, **kwargs: Any) -> None:
         await self._async_command({protocol.DP_SWITCH_CHARGE: True})

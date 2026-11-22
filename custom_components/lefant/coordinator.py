@@ -3,7 +3,7 @@ import base64
 import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 from typing import Any
 
@@ -26,8 +26,18 @@ _LOGGER = logging.getLogger(__name__)
 # the robot answers a map edit within a few seconds, the new room list follows
 EDIT_TIMEOUT = 15
 ROOMS_TIMEOUT = 20
-# a cleaning is over when the robot heads home or rests; "charging" also shows up between two mop washes
-JOB_END_STATUSES = protocol.RETURNING_STATUSES | {"drying", "sleep", "standby", "charge_done"}
+# a cleaning is over when the robot heads home or dries the mop; it goes on when the robot comes back to it
+JOB_END_STATUSES = protocol.RETURNING_STATUSES | {"drying", "charge_done"}
+# the mop washes at the dock come also after the robot is home: they do not start a cleaning
+START_STATUSES = protocol.CLEANING_STATUSES - {"wash_mop", "goto_wash"}
+# between two mop washes the robot charges for a few seconds: longer, the cleaning is over
+DOCK_PAUSE = 120
+# seconds after a start in which the robot may still send its minute counter from 0
+FRESH_JOB = 60
+# the robot drops the connection often while cleaning: entities keep the last state for this long
+OFFLINE_GRACE = timedelta(minutes=10)
+# the robot passes the base alerts on while it rests on the dock; leaving or away it reports them all clear
+BASE_READ_STATUSES = protocol.DOCKED_STATUSES | {"wash_mop"} | protocol.HELD_STATUSES
 # seconds between a start sent by HA and the robot reporting that it is cleaning
 REQUEST_WINDOW = 120
 # pushed only on some events (room list, no-go areas, base alerts): saved so that HA starts with them without the cloud
@@ -63,6 +73,9 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.device: LefantDevice | None = None
         self.connected = False
         self.connected_event = asyncio.Event()
+        self.offline_since: datetime | None = None
+        self._offline_timer: CALLBACK_TYPE | None = None
+        self._stopped = False
         self.robot_rooms: dict[int, str] = {}
         self.areas: list[dict[str, Any]] = []
         self.walls: list[list[protocol.RawPoint]] = []
@@ -88,6 +101,10 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # order sent (the robot cleans them in that order) and passes,
         # start time and mop washes so far; kept across restarts
         self.job: dict[str, Any] | None = None
+        # last cleaning closed and the robot's minutes then: it goes on if the robot resumes without a new count
+        self._last_job: tuple[dict[str, Any], int | None] | None = None
+        self._fresh_until = 0.0
+        self._status_since = time.monotonic()
         self._job_store: Store[dict[str, Any]] = Store(hass, 1, f"{DOMAIN}.{config_entry.entry_id}.job")
         self._requested: tuple[list[int] | None, int, float] | None = None
         # last cleaning record, values of SAVED_DPS and last cleaning: HA starts with them also when the cloud
@@ -120,6 +137,11 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             for room_id, name in sorted(self.robot_rooms.items())
         }
 
+    @property
+    def available(self) -> bool:
+        """Connected, or disconnected for less than OFFLINE_GRACE."""
+        return self.connected or self._offline_timer is not None
+
     @callback
     def async_handle_connection(self, connected: bool) -> None:
         if connected:
@@ -127,12 +149,36 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if connected == self.connected:
             return
         self.connected = connected
+        self._cancel_offline_timer()
+        self.offline_since = None if connected else dt_util.utcnow()
+        if not connected and not self._stopped:
+            self._offline_timer = async_call_later(self.hass, OFFLINE_GRACE, self._offline_timeout)
         _LOGGER.info("Robot %s", "connected" if connected else "disconnected")
         self.async_update_listeners()
 
     @callback
+    def _offline_timeout(self, _now: datetime) -> None:
+        self._offline_timer = None
+        self.async_update_listeners()
+
+    @callback
+    def _cancel_offline_timer(self) -> None:
+        if self._offline_timer:
+            self._offline_timer()
+            self._offline_timer = None
+
+    @callback
+    def async_stop_connection(self) -> None:
+        """The entry unloads: the device thread reports the disconnection afterwards."""
+        self._stopped = True
+        self._cancel_offline_timer()
+
+    @callback
     def async_handle_dps(self, dps: dict[str, Any]) -> None:
         previous = self.status
+        if protocol.DP_BASE_STATE in dps and not self._at_base({**(self.data or {}), **dps}):
+            # keep what the base said last
+            dps = {k: v for k, v in dps.items() if k != protocol.DP_BASE_STATE}
         if protocol.DP_ROOMS in dps:
             if (rooms := protocol.parse_rooms(dps[protocol.DP_ROOMS])) and rooms != self.robot_rooms:
                 if self.robot_rooms and set(rooms) != set(self.robot_rooms) and not self._editing:
@@ -150,8 +196,8 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._pushed.update(saved)
             self._save_state()
         data = {**(self.data or {}), **dps}
-        self._count_usage(dps, data, previous)
-        self._track_job(previous, data)
+        restarted = self._count_usage(dps, data, previous)
+        self._track_job(previous, data, restarted)
         self.async_set_updated_data(data)
         current = self.status
         if previous != current and previous in protocol.CLEANING_STATUSES | protocol.RETURNING_STATUSES and (
@@ -172,10 +218,16 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if (future := self._reports.pop(cmd, None)) and not future.done():
             future.set_result(data)
 
-    def _count_usage(self, dps: dict[str, Any], data: dict[str, Any], previous: str | None) -> None:
-        changed = False
+    @staticmethod
+    def _at_base(data: dict[str, Any]) -> bool:
+        return bool(data.get(protocol.DP_ON_DOCK)) and data.get(protocol.DP_STATUS) in BASE_READ_STATUSES
+
+    def _count_usage(self, dps: dict[str, Any], data: dict[str, Any], previous: str | None) -> bool:
+        """Count the usage; True when the robot starts counting the minutes of a new cleaning."""
+        changed = restarted = False
         if (minutes := dps.get(protocol.DP_CLEAN_TIME)) is not None:
             last, self._clean_minutes = self._clean_minutes, minutes
+            restarted = last is not None and minutes < last
             # DP 16 counts the minutes of the running cleaning and starts again from 0 at the next one
             delta = 0 if last is None else minutes - last if minutes >= last else minutes
             if delta > 0:
@@ -190,11 +242,15 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             changed = True
         if changed:
             self._usage_store.async_delay_save(lambda: self.usage, 60)
+        return restarted
 
     async def async_load_usage(self) -> None:
         if stored := await self._usage_store.async_load():
             self.usage.update(stored)
-        self.job = (await self._job_store.async_load() or {}).get("job")
+        stored_job = await self._job_store.async_load() or {}
+        self.job = stored_job.get("job")
+        if last_job := stored_job.get("last_job"):
+            self._last_job = (last_job["job"], last_job["minutes"])
         # before the robot connects: a save it triggers would hide the stored values from async_load
         saved = await self._state_store.async_load() or {}
         self._saved_dps = dict(saved.get("dps") or {})
@@ -204,33 +260,76 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Rooms and passes of a cleaning started from HA (None: whole house), matched when the robot starts."""
         self._requested = (rooms, repeats, time.monotonic())
 
-    def _track_job(self, previous: str | None, data: dict[str, Any]) -> None:
+    def _track_job(self, previous: str | None, data: dict[str, Any], restarted: bool) -> None:
         current = data.get(protocol.DP_STATUS)
-        if current == previous:
-            return
+        now = time.monotonic()
+        if current != previous:
+            self._status_since = now
         job = self.job
-        if job is None and current in protocol.CLEANING_STATUSES:
-            requested = self._requested
-            if requested and time.monotonic() - requested[2] > REQUEST_WINDOW:
-                requested = None
-            self._requested = None
-            if requested and requested[0]:
-                job = {"scope": "rooms", "rooms": requested[0], "repeats": requested[1]}
-            elif requested or data.get(protocol.DP_MODE) == "smart":
-                job = {"scope": "house", "rooms": []}
-            else:
-                job = {"scope": "other", "rooms": []}
-            # a cleaning already running when HA connects has an unknown start
-            job |= {"started": dt_util.utcnow().isoformat() if previous is not None else None, "mop_washes": 0}
-        elif job is not None and current == "wash_mop":
+        if restarted:
+            # the robot counts the minutes of a new cleaning: the previous one cannot go on
+            self._last_job = None
+            if now > self._fresh_until:
+                job = None
+        if job is None:
+            if current in START_STATUSES and (current != previous or restarted):
+                job = self._open_job(previous, data, now)
+        elif current == "wash_mop" and previous != "wash_mop":
             job = {**job, "mop_washes": job["mop_washes"] + 1}
-        elif job is not None and current in JOB_END_STATUSES:
+        elif self._job_over(previous, current, data, now):
             self._note_cleaning(job, data)
+            self._last_job = (job, data.get(protocol.DP_CLEAN_TIME))
             job = None
-        else:
+        if job is self.job:
             return
         self.job = job
-        self._job_store.async_delay_save(lambda: {"job": self.job}, 5)
+        self._job_store.async_delay_save(self._job_data, 5)
+
+    def _open_job(self, previous: str | None, data: dict[str, Any], now: float) -> dict[str, Any]:
+        requested, self._requested = self._requested, None
+        if requested and now - requested[2] > REQUEST_WINDOW:
+            requested = None
+        last, self._last_job = self._last_job, None
+        minutes = data.get(protocol.DP_CLEAN_TIME)
+        if requested is None and last and (last[1] is None or minutes is None or minutes >= last[1]):
+            # the robot goes on with the cleaning it left (asleep after a pause, recharged): same rooms and start
+            self._fresh_until = 0.0
+            return last[0]
+        if requested and requested[0]:
+            job = {"scope": "rooms", "rooms": requested[0], "repeats": requested[1]}
+        elif requested or data.get(protocol.DP_MODE) == "smart":
+            job = {"scope": "house", "rooms": []}
+        else:
+            job = {"scope": "other", "rooms": []}
+        self._fresh_until = now + FRESH_JOB
+        # a cleaning already running when HA connects has an unknown start
+        return job | {"started": dt_util.utcnow().isoformat() if previous is not None else None, "mop_washes": 0}
+
+    def _job_over(self, previous: str | None, current: str | None, data: dict[str, Any], now: float) -> bool:
+        if current in JOB_END_STATUSES:
+            return True
+        held = protocol.PAUSED_STATUSES | protocol.HELD_STATUSES
+        if current in protocol.HELD_STATUSES:
+            # paused away from the dock the robot falls asleep: the cleaning goes on when it resumes
+            return bool(data.get(protocol.DP_ON_DOCK)) or (previous is not None and previous not in held)
+        if current in protocol.DOCKED_STATUSES:
+            # carried back to the dock after a pause, or charging for longer than between two mop washes
+            return previous in held or now - self._status_since > DOCK_PAUSE
+        return False
+
+    @callback
+    def end_job(self) -> None:
+        """A stop sent by HA: the cleaning is over, also when the robot was already asleep."""
+        if self.job is None:
+            return
+        self._note_cleaning(self.job, self.data or {})
+        self.job = self._last_job = None
+        self._job_store.async_delay_save(self._job_data, 5)
+        self.async_update_listeners()
+
+    def _job_data(self) -> dict[str, Any]:
+        last = self._last_job
+        return {"job": self.job, "last_job": {"job": last[0], "minutes": last[1]} if last else None}
 
     def _note_cleaning(self, job: dict[str, Any], data: dict[str, Any]) -> None:
         """Last cleaning from the robot's own counters; the cloud record, when it comes, replaces it."""
@@ -296,7 +395,11 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             except TuyaCloudError as err:
                 _LOGGER.warning("Cannot read the robot state from the cloud: %s", err)
             else:
-                self._saved_dps |= {k: v for k, v in shadow.items() if k in SAVED_DPS and v and k not in self._pushed}
+                self._saved_dps |= {
+                    k: v for k, v in shadow.items() if k in SAVED_DPS and v and k not in self._pushed
+                    # the cloud also keeps the all clear sent when the robot leaves the dock
+                    and not (k == protocol.DP_BASE_STATE and k in self._saved_dps)
+                }
         if not self.robot_rooms and (rooms := protocol.parse_rooms(self._saved_dps.get(protocol.DP_ROOMS))):
             self.robot_rooms = rooms
         self._handle_frame(protocol.parse_frame(self._saved_dps.get(protocol.DP_AREAS)))

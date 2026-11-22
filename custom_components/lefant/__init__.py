@@ -63,6 +63,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: LefantConfigEntry) -> bo
     coordinator.device = device
 
     async def _stop_device() -> None:
+        coordinator.async_stop_connection()
         await hass.async_add_executor_job(device.stop)
 
     device.start()

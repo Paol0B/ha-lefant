@@ -85,6 +85,8 @@ export const STRINGS = {
       dust: "Emptying dust into the dock",
       paused: "Paused",
       paused_detail: "Press Resume to continue.",
+      held: "Paused, the robot fell asleep",
+      held_detail: "The cleaning is not over: press Resume to finish it.",
       returning: "Returning to the dock",
       done_returning: "Cleaning done: returning to the dock",
     },
@@ -163,7 +165,9 @@ export const STRINGS = {
     docked: "Docked",
     mop_on: "Mop attached",
     mop_missing: "Mop not attached",
-    dock_alert: "Dock: {alerts}",
+    dock_alert: "Dock: check {alerts}",
+    offline: "No signal since {time}: last known state",
+    robot_alarm: "Robot alarm, code {code}",
     no_map: "The map appears after the first full cleaning saved to the cloud.",
     select_none: "Select none",
     select_all: "Select all",
@@ -193,7 +197,12 @@ export const STRINGS = {
     last_cleaning: "Last cleaning",
     check: "Check",
     not_read: "Not read yet",
-    base_hint: "The dock warns when a tank or the dust bag is missing. The robot does not report the detergent.",
+    base_hint: "The dock checks the tanks and the dust bag while the robot rests on it; away from the dock the last check stays. The robot does not report the detergent.",
+    base_fix: {
+      clean_water: "Check that the tank is in place and full.",
+      dirty_water: "Check that the tank is in place and empty.",
+      dust_bag: "Push the bag all the way in and close the lid.",
+    },
     emptying_one: "{n} emptying",
     emptying_many: "{n} emptyings",
     confirm: "Confirm?",
@@ -336,6 +345,8 @@ export const STRINGS = {
       dust: "Svuota la polvere nella base",
       paused: "In pausa",
       paused_detail: "Premi Riprendi per continuare.",
+      held: "In pausa, il robot si è addormentato",
+      held_detail: "La pulizia non è finita: premi Riprendi per completarla.",
       returning: "Torna alla base",
       done_returning: "Pulizia finita: torna alla base",
     },
@@ -422,7 +433,9 @@ export const STRINGS = {
     docked: "Sulla base",
     mop_on: "Mop montato",
     mop_missing: "Mop assente",
-    dock_alert: "Base: {alerts}",
+    dock_alert: "Base: controlla {alerts}",
+    offline: "Nessun segnale dalle {time}: ultimo stato noto",
+    robot_alarm: "Allarme del robot, codice {code}",
     no_map: "La mappa compare dopo la prima pulizia completa salvata sul cloud.",
     select_none: "Deseleziona",
     select_all: "Seleziona tutte",
@@ -452,7 +465,12 @@ export const STRINGS = {
     last_cleaning: "Ultima pulizia",
     check: "Da controllare",
     not_read: "Non ancora letto",
-    base_hint: "La base avvisa quando un serbatoio o il sacchetto manca. Il detersivo non viene segnalato dal robot.",
+    base_hint: "La base controlla serbatoi e sacchetto quando il robot è appoggiato; fuori base resta l'ultimo controllo. Il detersivo non viene segnalato dal robot.",
+    base_fix: {
+      clean_water: "Controlla che il serbatoio sia inserito e pieno.",
+      dirty_water: "Controlla che il serbatoio sia inserito e vuoto.",
+      dust_bag: "Inserisci il sacchetto a battuta e chiudi il coperchio.",
+    },
     emptying_one: "{n} svuotamento",
     emptying_many: "{n} svuotamenti",
     confirm: "Confermi?",
@@ -618,6 +636,9 @@ const PHASE = {
   continuity_clear_charging: ["mdi:battery-charging", "phase.charging", ""],
   dust_collection: ["mdi:delete-empty-outline", "phase.dust", ""],
   paused: ["mdi:pause-circle-outline", "phase.paused", "phase.paused_detail"],
+  // only with a cleaning running: paused away from the dock the robot falls asleep
+  sleep: ["mdi:sleep", "phase.held", "phase.held_detail"],
+  standby: ["mdi:sleep", "phase.held", "phase.held_detail"],
   goto_charge: ["mdi:home-import-outline", "phase.returning", ""],
 };
 
@@ -625,6 +646,9 @@ const CLEANING = new Set(["smart", "zone_clean", "part_clean", "cleaning", "goto
   "relocating", "fastmaping", "wash_mop", "goto_wash"]);
 const PAUSED = new Set(["paused", "recharing_paused", "fastmaping_paused", "wash_paused", "relocating_pause"]);
 const RETURNING = new Set(["goto_charge", "relocating_recharge"]);
+const HELD = new Set(["sleep", "standby"]);
+// DP 164 code the dock sends with the dust bag alert, shown by the dust bag row
+const BAG_ALARM = 16;
 
 const MAP_REFRESH_MS = 10 * 60 * 1000;
 
@@ -1017,8 +1041,13 @@ class LefantVacuumCard extends HTMLElement {
     return this._state("125")?.state === "on";
   }
 
+  // no robot to send commands to: unavailable, or disconnected while the integration keeps the last state
+  _offline(vac) {
+    return vac?.state === "unavailable" || vac?.attributes.connected === false;
+  }
+
   _watchKeys() {
-    return ["battery", "status", "error", "cleaning_time", "cleaning_area", "171", "125", "114", "10", "14", "172", "15", "last_cleaning_end",
+    return ["battery", "status", "error", "alarm_code", "cleaning_time", "cleaning_area", "171", "125", "114", "10", "14", "172", "15", "last_cleaning_end",
       ...BASE.map(([key]) => key), ...PARTS.map(([part]) => (part === "dust_bag" ? "dust_bag_emptyings" : `${part}_usage`))];
   }
 
@@ -1042,11 +1071,20 @@ class LefantVacuumCard extends HTMLElement {
   _chips(vac) {
     const error = this._state("error");
     const chips = [];
+    if (vac.attributes.connected === false && vac.attributes.offline_since) {
+      const time = new Date(vac.attributes.offline_since).toLocaleTimeString(this._t("locale"), { hour: "2-digit", minute: "2-digit" });
+      chips.push(`<span class="chip warn"><ha-icon icon="mdi:wifi-off"></ha-icon>${this._t("offline", { time })}</span>`);
+    }
     if (this._docked()) chips.push(`<span class="chip"><ha-icon icon="mdi:home-import-outline"></ha-icon>${this._t("docked")}</span>`);
     const mop = this._state("171");
     if (mop) chips.push(`<span class="chip ${mop.state === "on" ? "" : "warn"}"><ha-icon icon="${mop.state === "on" ? "mdi:water" : "mdi:water-off"}"></ha-icon>${mop.state === "on" ? this._t("mop_on") : this._t("mop_missing")}</span>`);
     const baseAlerts = BASE.filter(([key]) => this._state(key)?.state === "on").map(([, label]) => this._t(label).toLowerCase());
     if (baseAlerts.length) chips.push(`<span class="chip warn"><ha-icon icon="mdi:home-alert-outline"></ha-icon>${this._t("dock_alert", { alerts: esc(baseAlerts.join(", ")) })}</span>`);
+    // codes without a known meaning: shown as they come
+    const alarm = Number(this._state("alarm_code")?.state);
+    if (alarm && alarm !== BAG_ALARM) {
+      chips.push(`<span class="chip warn" data-action="more" data-value="alarm_code"><ha-icon icon="mdi:alert-outline"></ha-icon>${this._t("robot_alarm", { code: alarm })}</span>`);
+    }
     if (error && error.state !== "none" && error.state !== "unavailable" && error.state !== "unknown") {
       chips.push(`<span class="chip bad" data-action="more" data-value="error"><ha-icon icon="mdi:alert-circle"></ha-icon>${esc(this._t(`errors.${error.state}`) || error.state)}</span>`);
     }
@@ -1634,16 +1672,19 @@ class LefantVacuumCard extends HTMLElement {
 
   _actions(vac) {
     const status = this._status(vac);
-    const off = vac.state === "unavailable" || this._busy ? "disabled" : "";
+    const off = this._offline(vac) || this._busy ? "disabled" : "";
     const busy = (label) => (this._busy === label ? `<span class="spinner"></span>` : "");
     const n = this._selected.length;
+    const job = this._jobInfo(vac);
+    // asleep after a pause the cleaning is not over
+    const paused = PAUSED.has(status) || (job && HELD.has(status));
     let primary;
     let secondary = [];
     // between two mop washes the robot reports "charging" for a moment: the cleaning is still running
-    if (CLEANING.has(status) || (this._jobInfo(vac) && !PAUSED.has(status) && !RETURNING.has(status))) {
+    if (!paused && (CLEANING.has(status) || (job && !RETURNING.has(status)))) {
       primary = `<button class="primary" data-action="pause" ${off}>${busy("call.pause")}<ha-icon icon="mdi:pause"></ha-icon>${this._t("call.pause")}</button>`;
       secondary = ["stop", "dock"];
-    } else if (PAUSED.has(status)) {
+    } else if (paused) {
       primary = `<button class="primary" data-action="resume" ${off}>${busy("call.resume")}<ha-icon icon="mdi:play"></ha-icon>${this._t("resume")}</button>`;
       secondary = ["stop", "dock"];
     } else if (RETURNING.has(status)) {
@@ -1692,7 +1733,7 @@ class LefantVacuumCard extends HTMLElement {
   _modes(vac) {
     const fan = vac.attributes.fan_speed;
     const water = this._state("10")?.state;
-    const off = vac.state === "unavailable" || this._busy ? "disabled" : "";
+    const off = this._offline(vac) || this._busy ? "disabled" : "";
     const seg = (items, current, action) => `<div class="seg">${items.map(([v, label, icon]) =>
       `<button class="${v === current ? "on" : ""}" data-action="${action}" data-value="${v}" ${off}><ha-icon icon="${icon}"></ha-icon><span>${this._t(label)}</span></button>`).join("")}</div>`;
     let hint = "";
@@ -1771,7 +1812,7 @@ class LefantVacuumCard extends HTMLElement {
       return `
         <div class="part" data-action="more" data-value="${key}">
           <ha-icon icon="${icon}"></ha-icon>
-          <span class="text">${this._t(label)}</span>
+          <span class="text">${this._t(label)}${alert ? `<span class="muted">${this._t(`base_fix.${key.replace("base_", "")}`)}</span>` : ""}</span>
           <span class="pill ${alert ? "warn" : known ? "ok" : ""}">${alert ? this._t("check") : known ? "OK" : this._t("not_read")}</span>
         </div>`;
     }).join("");
@@ -1822,7 +1863,7 @@ class LefantVacuumCard extends HTMLElement {
       const st = this._state(key);
       if (!st) return "";
       const on = st.state === "on";
-      const off = st.state === "unavailable" || this._busy ? "disabled" : "";
+      const off = st.state === "unavailable" || this._offline(this._state("vacuum")) || this._busy ? "disabled" : "";
       return `
         <button class="setting" role="switch" aria-checked="${on}" data-action="setting" data-value="${key}" ${off}>
           <ha-icon icon="${icon}"></ha-icon>

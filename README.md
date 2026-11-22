@@ -61,7 +61,7 @@ To rename rooms, open the integration's **Configure** dialog. Names stay in Home
 The integration serves the card, but Home Assistant needs it as a dashboard resource:
 
 1. **Settings > Dashboards**, menu **Resources** (it needs advanced mode in your user profile).
-2. Add `/lefant_static/lefant-vacuum-card.js?v=0.7.0` as **JavaScript module**.
+2. Add `/lefant_static/lefant-vacuum-card.js?v=0.8.0` as **JavaScript module**.
 3. Add the card to a dashboard:
 
 ```yaml
@@ -76,7 +76,7 @@ The card can draw your own floor plan over the robot's rooms. The image needs tr
 floorplan:
   image: /local/floorplan.svg
   dark_image: /local/floorplan-dark.svg # optional
-  bounds: [-9.5, -7, 6.5, 3]  # left, top, right, bottom
+  bounds: [-9.5, -7, 6.5, 3] # left, top, right, bottom
 ```
 
 Browsers keep the card in cache. After an update, change the `?v=` value of the resource to the new version.
@@ -96,7 +96,9 @@ For a Roborock robot, use `type: custom:roborock-vacuum-card` with the Roborock 
 | button | main brush, side brush, filter, mop pads, dust bag replaced |
 | image (cloud) | last cleaning map |
 
-The vacuum attribute `cleaning_job` describes the running cleaning: whole house or rooms in the order sent, passes, start time and mop washes.
+The vacuum attribute `cleaning_job` describes the running cleaning: whole house or rooms in the order sent, passes, start time and mop washes. A cleaning paused away from the dock stays open while the robot sleeps, and goes on when the robot resumes it; `vacuum.start` resumes it instead of starting the whole house.
+
+The robot drops the connection often while cleaning: the entities keep the last state for 10 minutes, and the vacuum attributes `connected` and `offline_since` tell when it is missing.
 
 ## Commands
 
@@ -141,6 +143,7 @@ actions:
 
 ## Known limits
 
+- The dock reports its alerts only while the robot rests on it. Away from it the robot reports them all clear, so the integration keeps the last reading.
 - The robot does not report its live position or the room it is in. During a room cleaning started from Home Assistant the card estimates the rooms done and the room in progress from the area cleaned.
 - The map shows the last finished cleaning. The robot sends it to the Tuya cloud a few minutes after docking, and the integration fetches it then. Besides that, it asks the cloud at startup and once a day.
 - When the robot makes a new map, Home Assistant shows a repair: check the no-go areas and the floor plan of the card.
