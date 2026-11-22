@@ -16,7 +16,8 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     coordinator = entry.runtime_data
-    if coordinator.cloud:
+    # without the cloud project the map saved from an earlier run is still shown
+    if coordinator.cloud or coordinator.map_image is not None:
         async_add_entities([LefantMap(hass, coordinator)])
 
 

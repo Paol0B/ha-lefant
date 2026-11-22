@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import logging
 import time
 from dataclasses import dataclass
@@ -9,6 +10,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -16,7 +18,7 @@ from homeassistant.util import dt as dt_util
 
 from . import protocol
 from .cloud import TuyaCloud, TuyaCloudError
-from .const import CONF_DEVICE_ID, CONF_ROOM_NAMES, DOMAIN, MAP_REFRESH_DELAYS, MAP_REFRESH_INTERVAL
+from .const import CONF_DEVICE_ID, CONF_ROOM_NAMES, DOMAIN, MAP_REFRESH_DELAYS, MAP_REFRESH_INTERVAL, MAP_SAME_FLOOR
 from .device import LefantDevice
 
 _LOGGER = logging.getLogger(__name__)
@@ -28,6 +30,8 @@ ROOMS_TIMEOUT = 20
 JOB_END_STATUSES = protocol.RETURNING_STATUSES | {"drying", "sleep", "standby", "charge_done"}
 # seconds between a start sent by HA and the robot reporting that it is cleaning
 REQUEST_WINDOW = 120
+# pushed only on some events (room list, no-go areas, base alerts): saved so that HA starts with them without the cloud
+SAVED_DPS = (protocol.DP_ROOMS, protocol.DP_AREAS, protocol.DP_BASE_STATE)
 
 type LefantConfigEntry = ConfigEntry[LefantCoordinator]
 
@@ -41,7 +45,8 @@ class LastCleaning:
     end: datetime
     minutes: int
     area: int
-    rooms: list[int]
+    # None: a cleaning started outside HA and known only from the robot's counters
+    rooms: list[int] | None
 
 
 class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -85,6 +90,16 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.job: dict[str, Any] | None = None
         self._job_store: Store[dict[str, Any]] = Store(hass, 1, f"{DOMAIN}.{config_entry.entry_id}.job")
         self._requested: tuple[list[int] | None, int, float] | None = None
+        # last cleaning record, values of SAVED_DPS and last cleaning: HA starts with them also when the cloud
+        # does not answer
+        self._map_store: Store[dict[str, Any]] = Store(hass, 1, f"{DOMAIN}.{config_entry.entry_id}.map")
+        self._state_store: Store[dict[str, Any]] = Store(hass, 1, f"{DOMAIN}.{config_entry.entry_id}.state")
+        self._saved_dps: dict[str, Any] = {}
+        self._saved_last: dict[str, Any] | None = None
+        # SAVED_DPS pushed by the robot since HA started: newer than the cloud
+        self._pushed: set[str] = set()
+        # a split or merge sent by HA is running: the new room list is expected
+        self._editing = False
 
     async def _async_update_data(self) -> dict[str, Any]:
         return self.data or {}
@@ -120,6 +135,8 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         previous = self.status
         if protocol.DP_ROOMS in dps:
             if (rooms := protocol.parse_rooms(dps[protocol.DP_ROOMS])) and rooms != self.robot_rooms:
+                if self.robot_rooms and set(rooms) != set(self.robot_rooms) and not self._editing:
+                    self._map_changed("the room list changed without an edit from HA")
                 self.robot_rooms = rooms
                 self._rooms_changed.set()
         for value in dps.values():
@@ -128,6 +145,10 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             unknown = [i for i, flag in enumerate(flags) if flag and i not in protocol.BASE_FLAGS.values()]
             if unknown:
                 _LOGGER.info("Unknown base station alert, bytes %s: %s", unknown, flags.hex(" "))
+        if saved := {k: v for k, v in dps.items() if k in SAVED_DPS and v}:
+            self._saved_dps.update(saved)
+            self._pushed.update(saved)
+            self._save_state()
         data = {**(self.data or {}), **dps}
         self._count_usage(dps, data, previous)
         self._track_job(previous, data)
@@ -174,6 +195,10 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if stored := await self._usage_store.async_load():
             self.usage.update(stored)
         self.job = (await self._job_store.async_load() or {}).get("job")
+        # before the robot connects: a save it triggers would hide the stored values from async_load
+        saved = await self._state_store.async_load() or {}
+        self._saved_dps = dict(saved.get("dps") or {})
+        self._saved_last = saved.get("last_cleaning")
 
     def note_request(self, rooms: list[int] | None, repeats: int = 1) -> None:
         """Rooms and passes of a cleaning started from HA (None: whole house), matched when the robot starts."""
@@ -200,11 +225,47 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         elif job is not None and current == "wash_mop":
             job = {**job, "mop_washes": job["mop_washes"] + 1}
         elif job is not None and current in JOB_END_STATUSES:
+            self._note_cleaning(job, data)
             job = None
         else:
             return
         self.job = job
         self._job_store.async_delay_save(lambda: {"job": self.job}, 5)
+
+    def _note_cleaning(self, job: dict[str, Any], data: dict[str, Any]) -> None:
+        """Last cleaning from the robot's own counters; the cloud record, when it comes, replaces it."""
+        minutes, area = data.get(protocol.DP_CLEAN_TIME), data.get(protocol.DP_CLEAN_AREA)
+        if minutes is None or area is None:
+            return
+        rooms = None if job["scope"] == "other" else list(job["rooms"])
+        self.last_cleaning = LastCleaning(dt_util.utcnow(), int(minutes), int(area), rooms)
+        self._save_state()
+
+    def _save_state(self) -> None:
+        self._state_store.async_delay_save(self._state_data, 10)
+
+    def _state_data(self) -> dict[str, Any]:
+        last = self.last_cleaning
+        return {
+            "dps": self._saved_dps,
+            "last_cleaning": {
+                "end": last.end.isoformat(), "minutes": last.minutes, "area": last.area, "rooms": last.rooms
+            } if last else None,
+        }
+
+    @callback
+    def _map_changed(self, reason: str) -> None:
+        _LOGGER.warning("The robot has a new map (%s): check the no-go areas and the floor plan of the card", reason)
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            f"map_changed_{self.config_entry.entry_id}",
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="map_changed",
+            translation_placeholders={"name": self.config_entry.title},
+        )
 
     async def async_reset_usage(self, part: str) -> None:
         self.usage[part] = 0
@@ -226,20 +287,28 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         finally:
             self._reports.pop(report, None)
 
-    async def async_load_cloud_state(self) -> None:
-        """Rooms, no-go areas and base alerts are pushed only on some events, so read the last values from the cloud."""
-        if not self.cloud:
-            return
-        try:
-            shadow = await self.cloud.shadow(self.device_id)
-        except TuyaCloudError as err:
-            _LOGGER.warning("Cannot read the robot state from the cloud: %s", err)
-            return
-        if not self.robot_rooms and (rooms := protocol.parse_rooms(shadow.get(protocol.DP_ROOMS))):
+    async def async_load_state(self) -> None:
+        """Rooms, no-go areas and base alerts are pushed only on some events: take the last values from the cloud,
+        else the ones saved at the last run, then draw the saved map."""
+        if self.cloud:
+            try:
+                shadow = await self.cloud.shadow(self.device_id)
+            except TuyaCloudError as err:
+                _LOGGER.warning("Cannot read the robot state from the cloud: %s", err)
+            else:
+                self._saved_dps |= {k: v for k, v in shadow.items() if k in SAVED_DPS and v and k not in self._pushed}
+        if not self.robot_rooms and (rooms := protocol.parse_rooms(self._saved_dps.get(protocol.DP_ROOMS))):
             self.robot_rooms = rooms
-        self._handle_frame(protocol.parse_frame(shadow.get(protocol.DP_AREAS)))
-        if protocol.DP_BASE_STATE not in (self.data or {}) and shadow.get(protocol.DP_BASE_STATE):
-            self.data = {**(self.data or {}), protocol.DP_BASE_STATE: shadow[protocol.DP_BASE_STATE]}
+        self._handle_frame(protocol.parse_frame(self._saved_dps.get(protocol.DP_AREAS)))
+        if protocol.DP_BASE_STATE not in (self.data or {}) and self._saved_dps.get(protocol.DP_BASE_STATE):
+            self.data = {**(self.data or {}), protocol.DP_BASE_STATE: self._saved_dps[protocol.DP_BASE_STATE]}
+        if stored := await self._map_store.async_load():
+            await self._async_use_record(stored["record"], base64.b64decode(stored["data"]))
+        if (last := self._saved_last) and (end := dt_util.parse_datetime(last["end"])) and (
+            self.last_cleaning is None or end > self.last_cleaning.end
+        ):
+            self.last_cleaning = LastCleaning(end, last["minutes"], last["area"], last["rooms"])
+        self._save_state()
         self.async_update_listeners()
 
     # --- map --------------------------------------------------------------
@@ -285,46 +354,65 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 record = await self.cloud.latest_record(self.device_id)
                 if not record or record["id"] == self._map_record_id:
                     return
-                info = protocol.parse_extend(record.get("extend", ""))
-                if info is None:
+                if protocol.parse_extend(record.get("extend", "")) is None:
                     _LOGGER.warning("Unknown cleaning record format: %s", record.get("extend"))
                     return
                 data = await self.cloud.record_map(self.device_id, record["id"])
             except TuyaCloudError as err:
                 _LOGGER.warning("Cannot download the cleaning map: %s", err)
                 return
-            try:
-                cmap = await self.hass.async_add_executor_job(protocol.decode_record, data, info.sections)
-            except (ValueError, IndexError) as err:
-                _LOGGER.warning("Cannot decode cleaning record %s: %s", record["id"], err)
-                return
-            self._map_record_id = record["id"]
-            self._cmap = cmap
-            self.map_edited = False
-            stored = await self._edits_store.async_load() or {}
-            if stored.get("record") == record["id"]:
-                self._edits = stored.get("edits", [])
-                for edit in self._edits:
-                    self._cmap = await self.hass.async_add_executor_job(self._apply_edit, self._cmap, edit)
-                self.map_edited = bool(self._edits)
-            elif self._edits or stored:
-                # a new record carries the robot's own map with the edits in it
-                self._edits = []
-                await self._edits_store.async_remove()
-            self.last_cleaning = LastCleaning(
-                end=dt_util.utc_from_timestamp(int(record["time"])),
-                minutes=info.minutes,
-                area=info.area,
-                rooms=cmap.cleaned_rooms,
-            )
-            await self._async_draw()
+            if await self._async_use_record(record, data):
+                # the record of this cleaning is in: no need for the other retries
+                self._cancel_map_retries()
+                await self._map_store.async_save({
+                    "record": {k: record.get(k) for k in ("id", "time", "extend")},
+                    "data": base64.b64encode(data).decode(),
+                })
+
+    async def _async_use_record(self, record: dict[str, Any], data: bytes) -> bool:
+        """Map, route and last cleaning of a cleaning record, downloaded or saved in HA."""
+        info = protocol.parse_extend(record.get("extend") or "")
+        if info is None:
+            _LOGGER.warning("Unknown cleaning record format: %s", record.get("extend"))
+            return False
+        try:
+            cmap = await self.hass.async_add_executor_job(protocol.decode_record, data, info.sections)
+        except (ValueError, IndexError) as err:
+            _LOGGER.warning("Cannot decode cleaning record %s: %s", record["id"], err)
+            return False
+        # edits change only the room ids, so the edited map has the floor of its record
+        if self._cmap is not None and (
+            await self.hass.async_add_executor_job(protocol.floor_overlap, self._cmap, cmap) < MAP_SAME_FLOOR
+        ):
+            self._map_changed(f"record {record['id']} has a different floor")
+        self._map_record_id = record["id"]
+        self._cmap = cmap
+        self.map_edited = False
+        stored = await self._edits_store.async_load() or {}
+        if stored.get("record") == record["id"]:
+            self._edits = stored.get("edits", [])
+            for edit in self._edits:
+                self._cmap = await self.hass.async_add_executor_job(self._apply_edit, self._cmap, edit)
+            self.map_edited = bool(self._edits)
+        elif self._edits or stored:
+            # a new record carries the robot's own map with the edits in it
+            self._edits = []
+            await self._edits_store.async_remove()
+        self.last_cleaning = LastCleaning(
+            end=dt_util.utc_from_timestamp(int(record["time"])),
+            minutes=info.minutes,
+            area=info.area,
+            rooms=cmap.cleaned_rooms,
+        )
+        await self._async_draw()
+        return True
 
     @staticmethod
     def _apply_edit(cmap: protocol.CleaningMap, edit: dict[str, Any]) -> protocol.CleaningMap:
         if "merge" in edit:
             return protocol.merge_pixels(cmap, set(edit["merge"]), edit["into"])
         (ax, ay), (bx, by) = edit["line"]
-        return protocol.split_pixels(cmap, edit["split"], edit["new"], ((ax, ay), (bx, by)))
+        return protocol.split_pixels(cmap, edit["split"], edit["new"], ((ax, ay), (bx, by)), edit.get("rest"))
 
     async def _async_add_edit(self, edit: dict[str, Any]) -> None:
         assert self._cmap is not None
@@ -392,17 +480,25 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if room_id not in self.robot_rooms:
             raise LefantEditError(f"unknown room {room_id}")
         before = dict(self.robot_rooms)
-        data = await self._async_send_and_wait(
-            protocol.split_command(room_id, [self.to_robot(p) for p in line[:2]]), protocol.CMD_SPLIT_REPORT
-        )
-        if not data or data[0] != 1:
-            raise LefantEditError("the robot refused to split the room: draw the line across the whole room")
-        after = await self._async_wait_rooms(before)
+        self._editing = True
+        try:
+            data = await self._async_send_and_wait(
+                protocol.split_command(room_id, [self.to_robot(p) for p in line[:2]]), protocol.CMD_SPLIT_REPORT
+            )
+            if not data or data[0] != 1:
+                raise LefantEditError("the robot refused to split the room: draw the line across the whole room")
+            after = await self._async_wait_rooms(before)
+        finally:
+            self._editing = False
+        _LOGGER.info("Room %s split: rooms %s -> %s", room_id, sorted(before), sorted(after))
         new_ids = sorted(set(after) - set(before))
         if self._cmap is not None and new_ids:
             (x0, y0) = self.map_geometry["offset"]
             pixel_line = [[p[0] + x0, p[1] + y0] for p in line[:2]]
-            await self._async_add_edit({"split": room_id, "new": new_ids[0], "line": pixel_line})
+            edit: dict[str, Any] = {"split": room_id, "new": new_ids[0], "line": pixel_line}
+            if room_id not in after and len(new_ids) > 1:
+                edit["rest"] = new_ids[1]
+            await self._async_add_edit(edit)
         self.async_update_listeners()
 
     async def async_merge_rooms(self, room_ids: list[int]) -> None:
@@ -410,10 +506,15 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if len(room_ids) != 2 or any(r not in self.robot_rooms for r in room_ids):
             raise LefantEditError("choose two existing rooms")
         before = dict(self.robot_rooms)
-        data = await self._async_send_and_wait(protocol.merge_command(room_ids), protocol.CMD_MERGE_REPORT)
-        if not data or data[0] != 1:
-            raise LefantEditError("the robot refused to merge the rooms: they must touch each other")
-        after = await self._async_wait_rooms(before)
+        self._editing = True
+        try:
+            data = await self._async_send_and_wait(protocol.merge_command(room_ids), protocol.CMD_MERGE_REPORT)
+            if not data or data[0] != 1:
+                raise LefantEditError("the robot refused to merge the rooms: they must touch each other")
+            after = await self._async_wait_rooms(before)
+        finally:
+            self._editing = False
+        _LOGGER.info("Rooms %s merged: rooms %s -> %s", room_ids, sorted(before), sorted(after))
         gone = set(room_ids) - set(after)
         target = next(iter(sorted(set(after) - set(before))), None) or next(
             (r for r in room_ids if r in after), None

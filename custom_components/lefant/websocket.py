@@ -70,7 +70,7 @@ def _payload(hass: HomeAssistant, entry: LefantConfigEntry) -> dict[str, Any]:
             "minutes": last.minutes,
             "area": last.area,
             "rooms": last.rooms,
-            "names": {str(room_id): coordinator.room_label(room_id) for room_id in last.rooms},
+            "names": {str(room_id): coordinator.room_label(room_id) for room_id in last.rooms or []},
         } if last else None,
     }
 

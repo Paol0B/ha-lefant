@@ -142,8 +142,8 @@ async def async_setup_entry(
     coordinator = entry.runtime_data
     entities: list[SensorEntity] = [LefantSensor(coordinator, d) for d in SENSORS]
     entities.extend(LefantUsageSensor(coordinator, d) for d in USAGE_SENSORS)
-    if coordinator.cloud:
-        entities.extend(LefantCleaningSensor(coordinator, d) for d in CLEANING_SENSORS)
+    # the robot's counters give the last cleaning also without the cloud project
+    entities.extend(LefantCleaningSensor(coordinator, d) for d in CLEANING_SENSORS)
     async_add_entities(entities)
 
 
@@ -183,4 +183,5 @@ class LefantCleaningSensor(LefantEntity, SensorEntity):
         if self.entity_description.key != "last_cleaning_end" or not self.coordinator.last_cleaning:
             return None
         names = self.coordinator.room_names()
-        return {"rooms": [names.get(r, f"Room {r}") for r in self.coordinator.last_cleaning.rooms]}
+        rooms = self.coordinator.last_cleaning.rooms
+        return {"rooms": None if rooms is None else [names.get(r, f"Room {r}") for r in rooms]}

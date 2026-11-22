@@ -3,7 +3,9 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from homeassistant.const import EVENT_HOMEASSISTANT_FINAL_WRITE
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.typing import ClientSessionGenerator, WebSocketGenerator
 
@@ -12,7 +14,7 @@ from custom_components.lefant.cloud import TuyaCloudError
 from custom_components.lefant.const import DOMAIN, MAP_REFRESH_DELAYS
 
 from . import CLOUD_DATA, DEVICE_ID, FakeDevice, rooms_dp
-from .test_protocol import record_file
+from .test_protocol import PIXELS, record_file
 
 VACUUM = "vacuum.lefant_m5_max"
 MAP_IMAGE = "image.lefant_m5_max_last_cleaning_map"
@@ -106,6 +108,8 @@ async def test_split_room(
     assert device.sent == [{protocol.DP_COMMAND: protocol.split_command(1, [(-25, 20), (-25, -20)])}]
     assert msg["result"]["map_edited"]
     assert {r["id"]: r["name"] for r in msg["result"]["rooms"]} == {1: "Kitchen", 2: "Hall", 3: "Room 3"}
+    # a room list changed by an edit from HA is not a new map
+    assert ir.async_get(hass).async_get_issue(DOMAIN, f"map_changed_{entry.entry_id}") is None
     assert "path" in msg["result"]["rooms"][2]
 
     # the edit preview survives a reload until the robot sends a new record
@@ -167,6 +171,55 @@ async def test_new_record_drops_edits(
     assert not coordinator.map_edited
     # room 2 is gone on the robot, so the old record draws it as plain floor
     assert {r["id"] for r in coordinator.map_geometry["rooms"]} == {1}
+    # the record is in: the other retries are not needed
+    assert coordinator._map_retries == []
+    assert ir.async_get(hass).async_get_issue(DOMAIN, f"map_changed_{entry.entry_id}") is None
+
+
+async def test_split_gives_two_new_ids(
+    hass: HomeAssistant, entry: MockConfigEntry, fake_device: list[FakeDevice], hass_ws_client: WebSocketGenerator
+) -> None:
+    fake_device[0].responder = lambda dps: [
+        {protocol.DP_COMMAND: protocol.encode(bytes([protocol.CMD_SPLIT_REPORT, 1]))},
+        {protocol.DP_ROOMS: rooms_dp({2: "Hall", 3: "", 4: ""})},
+    ]
+    msg = await _ws(hass, hass_ws_client, type="lefant/split_room", room_id=1, line=[[0.5, 0], [0.5, 4]])
+    assert msg["success"]
+    pixels = entry.runtime_data._cmap.pixels
+    assert pixels.count(3 * 4) == 2 and pixels.count(4 * 4) == 3 and 1 * 4 not in pixels
+
+
+async def test_new_map_from_the_robot(hass: HomeAssistant, entry: MockConfigEntry, cloud: dict[str, AsyncMock]) -> None:
+    shifted, _ = record_file(bytes([protocol.MAP_UNKNOWN] * 6) + PIXELS[:-6], route=[(0, 0), (10, -10)], rooms=[1, 2])
+    cloud["latest_record"].return_value = record(8)
+    cloud["record_map"].return_value = shifted
+    await entry.runtime_data._async_refresh_map()
+    issue = ir.async_get(hass).async_get_issue(DOMAIN, f"map_changed_{entry.entry_id}")
+    assert issue is not None and issue.translation_key == "map_changed"
+
+
+async def test_rooms_changed_outside_ha(hass: HomeAssistant, entry: MockConfigEntry, fake_device: list[FakeDevice]) -> None:
+    fake_device[0].on_dps({protocol.DP_ROOMS: rooms_dp({1: "Kitchen", 5: "Hall"})})
+    assert ir.async_get(hass).async_get_issue(DOMAIN, f"map_changed_{entry.entry_id}") is not None
+
+
+async def test_saved_map_without_cloud(
+    hass: HomeAssistant, entry: MockConfigEntry, cloud: dict[str, AsyncMock], hass_ws_client: WebSocketGenerator
+) -> None:
+    # the saved values are written a few seconds after they change, at the latest when HA stops
+    hass.bus.async_fire(EVENT_HOMEASSISTANT_FINAL_WRITE)
+    await hass.async_block_till_done()
+    cloud["shadow"].side_effect = TuyaCloudError("down")
+    cloud["latest_record"].side_effect = TuyaCloudError("down")
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert hass.states.get(MAP_IMAGE).state != "unavailable"
+    assert hass.states.get("sensor.lefant_m5_max_last_cleaning_duration").state == "42"
+    result = (await _ws(hass, hass_ws_client, type="lefant/map"))["result"]
+    assert result["map"]["route"] == "M3.0 2.0L4.0 3.0"
+    assert result["areas"] == [{"mode": 1, "points": [[3.0, 2.0], [4.0, 2.0], [4.0, 3.0]]}]
+    cloud["record_map"].assert_called_once()
 
 
 async def test_cloud_down(hass: HomeAssistant, fake_device: list[FakeDevice], cloud: dict[str, AsyncMock]) -> None:

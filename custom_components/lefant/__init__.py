@@ -77,7 +77,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: LefantConfigEntry) -> bo
             translation_placeholders={"host": data[CONF_HOST], "error": str(device.last_error)},
         ) from err
 
-    await coordinator.async_load_cloud_state()
+    await coordinator.async_load_state()
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     coordinator.async_start_map_updates()

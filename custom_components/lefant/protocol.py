@@ -400,9 +400,16 @@ def merge_pixels(cmap: CleaningMap, old_ids: set[int], new_id: int) -> CleaningM
 
 
 def split_pixels(
-    cmap: CleaningMap, room_id: int, new_id: int, line: tuple[tuple[float, float], tuple[float, float]]
+    cmap: CleaningMap,
+    room_id: int,
+    new_id: int,
+    line: tuple[tuple[float, float], tuple[float, float]],
+    rest_id: int | None = None,
 ) -> CleaningMap:
-    """Preview of a split: the smaller side of the line, in map pixels, gets the new id."""
+    """Preview of a split: the smaller side of the line, in map pixels, gets the new id.
+
+    The other side keeps the room id, or gets rest_id when the robot gave both sides a new id.
+    """
     (ax, ay), (bx, by) = line
     w = cmap.width
     sides: dict[bool, list[int]] = {True: [], False: []}
@@ -410,9 +417,24 @@ def split_pixels(
         if v < 240 and v // 4 == room_id and v:
             x, y = i % w, i // w
             sides[(bx - ax) * (y - ay) - (by - ay) * (x - ax) > 0].append(i)
-    moved = set(min(sides.values(), key=len))
-    pixels = bytes(new_id * 4 | v & 3 if i in moved else v for i, v in enumerate(cmap.pixels))
+    small, large = sorted(sides.values(), key=len)
+    ids = dict.fromkeys(small, new_id) | (dict.fromkeys(large, rest_id) if rest_id is not None else {})
+    pixels = bytes(ids[i] * 4 | v & 3 if i in ids else v for i, v in enumerate(cmap.pixels))
     return replace(cmap, pixels=pixels)
+
+
+def floor_overlap(old: CleaningMap, new: CleaningMap) -> float:
+    """Share of floor two maps have in common: 0.97-0.99 between two cleanings, low when the robot made a new map."""
+    if (old.width, old.height, old.origin) != (new.width, new.height, new.origin):
+        return 0.0
+
+    def floor(cmap: CleaningMap) -> set[int]:
+        return {i for i, v in enumerate(cmap.pixels) if v != MAP_UNKNOWN and v < 240 and not v & 3}
+
+    a, b = floor(old), floor(new)
+    if not a or not b:
+        return 0.0
+    return len(a & b) / min(len(a), len(b))
 
 
 def render_map(cmap: CleaningMap, room_names: dict[int, str], scale: int = 2) -> bytes:

@@ -159,5 +159,11 @@
     "unknown_fan_speed": {
       "message": "Unknown fan speed {fan_speed}. Supported: {known}"
     }
+  },
+  "issues": {
+    "map_changed": {
+      "title": "{name} has a new map",
+      "description": "The robot map of {name} no longer matches the saved one: the robot mapped the house again, or its rooms were changed outside Home Assistant. Rooms, no-go areas and barriers follow the new map: check them in the card and, if the card shows a floor plan, check that it still lines up with the rooms. Ignore this message once done."
+    }
   }
 }

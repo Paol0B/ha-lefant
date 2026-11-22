@@ -10,7 +10,8 @@ This is an independent project. It is not made, endorsed or supported by Lefant 
 - Vacuum entity: start, pause, stop, return to dock, locate, suction level and room cleaning, also through Home Assistant's **Clean area** action.
 - Sensors for battery, status, faults, the running cleaning and the base station (clean water, dirty water, dust bag).
 - Wear counters for main brush, side brush, filter and mop pads. The robot does not report wear, so Home Assistant counts the cleaning minutes of each part. A button resets a counter when you replace the part.
-- With the cloud project: an image of the last cleaning map with rooms and route, and sensors for the last cleaning.
+- With the cloud project: an image of the last cleaning map with rooms and route. Home Assistant saves the map, the room list and the no-go areas, so they stay when the cloud does not answer.
+- Sensors for the last cleaning, from the robot's counters and, with the cloud project, from the cleaning record.
 - A dashboard card: map with rooms to pick, cleaning controls, no-go areas, barriers, and room split, merge and rename. It follows the Home Assistant language: Italian or English.
 - Experimental: the same card for Roborock robots set up with Home Assistant's Roborock integration.
 
@@ -60,13 +61,22 @@ To rename rooms, open the integration's **Configure** dialog. Names stay in Home
 The integration serves the card, but Home Assistant needs it as a dashboard resource:
 
 1. **Settings > Dashboards**, menu **Resources** (it needs advanced mode in your user profile).
-2. Add `/lefant_static/lefant-vacuum-card.js?v=0.6.1` as **JavaScript module**.
+2. Add `/lefant_static/lefant-vacuum-card.js?v=0.7.0` as **JavaScript module**.
 3. Add the card to a dashboard:
 
 ```yaml
 type: custom:lefant-vacuum-card
 entity: vacuum.lefant_m5_max
 title: Robot # optional
+```
+
+The card can draw your own floor plan over the robot's rooms. The image needs transparent floors: the room colors show through them, and its walls replace the robot's. `bounds` places the image edges in meters from the dock, x to the right and y down as on the map:
+
+```yaml
+floorplan:
+  image: /local/floorplan.svg
+  dark_image: /local/floorplan-dark.svg # optional
+  bounds: [-9.5, -7, 6.5, 3]  # left, top, right, bottom
 ```
 
 Browsers keep the card in cache. After an update, change the `?v=` value of the resource to the new version.
@@ -132,7 +142,8 @@ actions:
 ## Known limits
 
 - The robot does not report its live position or the room it is in. During a room cleaning started from Home Assistant the card estimates the rooms done and the room in progress from the area cleaned.
-- The map shows the last finished cleaning. The robot sends it to the Tuya cloud a few minutes after docking, and the integration fetches it then.
+- The map shows the last finished cleaning. The robot sends it to the Tuya cloud a few minutes after docking, and the integration fetches it then. Besides that, it asks the cloud at startup and once a day.
+- When the robot makes a new map, Home Assistant shows a repair: check the no-go areas and the floor plan of the card.
 - After a room split or merge, the map shows a preview until the next cleaning brings the robot's own map.
 - Map edits work only while the robot is not cleaning.
 - Re-pairing the robot gives it a new local key. Remove the integration entry and add it again.

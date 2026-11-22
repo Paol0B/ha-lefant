@@ -61,3 +61,15 @@ test("room in progress estimated from the area cleaned, in the order sent", () =
     for (const key of ["job_estimate_hint", "estimated_room", "map_note_job"]) assert.notEqual(translate(lang, key), undefined);
   }
 });
+
+test("floor plan placed in meters from the dock", async () => {
+  const { floorplanBox } = await import(cardUrl);
+  const plan = { image: "/local/plan.svg", dark_image: "/local/plan-dark.svg", bounds: [-1, -0.5, 2, 1] };
+  assert.deepEqual(floorplanBox(plan, [100, 50], false), { href: "/local/plan.svg", x: 80, y: 40, width: 60, height: 30 });
+  assert.equal(floorplanBox(plan, [100, 50], true).href, "/local/plan-dark.svg");
+  assert.equal(floorplanBox({ image: "/local/plan.svg", bounds: [0, 0, 1, 1] }, [0, 0], true).href, "/local/plan.svg");
+  assert.equal(floorplanBox(undefined, [0, 0]), null);
+  assert.equal(floorplanBox({ image: "/local/plan.svg", bounds: [1, 0, 0, 1] }, [0, 0]), null);
+  assert.equal(floorplanBox({ image: "/local/plan.svg", bounds: [0, 0, "x", 1] }, [0, 0]), null);
+  assert.equal(floorplanBox(plan, undefined), null);
+});

@@ -180,6 +180,19 @@ def test_merge_and_split_pixels() -> None:
     # vertical line at x = 0.5 across room 1: the 2 pixels on the left are the smaller side
     split = protocol.split_pixels(cmap, 1, 3, ((0.5, 0), (0.5, 4)))
     assert split.pixels.count(12) == 2 and split.pixels.count(4) == 3
+    # the robot gave both sides a new id
+    split = protocol.split_pixels(cmap, 1, 3, ((0.5, 0), (0.5, 4)), rest_id=4)
+    assert split.pixels.count(12) == 2 and split.pixels.count(16) == 3 and 4 not in split.pixels
+
+
+def test_floor_overlap() -> None:
+    cmap = protocol.CleaningMap(6, 4, (30, 20), PIXELS)
+    assert protocol.floor_overlap(cmap, protocol.merge_pixels(cmap, {2}, 1)) == 1
+    # the same house one row lower
+    shifted = protocol.CleaningMap(6, 4, (30, 20), bytes([protocol.MAP_UNKNOWN] * 6) + PIXELS[:-6])
+    assert protocol.floor_overlap(cmap, shifted) < 0.9
+    assert protocol.floor_overlap(cmap, protocol.CleaningMap(6, 4, (40, 20), PIXELS)) == 0
+    assert protocol.floor_overlap(cmap, protocol.CleaningMap(6, 4, (30, 20), bytes([0xF0] * 24))) == 0
 
 
 def test_render_map() -> None:

@@ -26,9 +26,12 @@ REGIONS = {
 }
 
 CONNECT_TIMEOUT = 20
-MAP_REFRESH_INTERVAL = timedelta(minutes=30)
+# the map is saved in HA: the cloud is asked after each cleaning and once a day, few calls of the free quota
+MAP_REFRESH_INTERVAL = timedelta(days=1)
 # the cleaning record reaches the cloud some time after the robot docks
 MAP_REFRESH_DELAYS = (60, 180, 600)
+# below this share of floor in common with the saved map, the robot made a new map
+MAP_SAME_FLOOR = 0.9
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,

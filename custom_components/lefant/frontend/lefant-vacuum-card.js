@@ -647,6 +647,22 @@ function storageSet(key, value) {
   }
 }
 
+// floor plan image placed by its edges in meters from the dock, x to the right and y down as on the map:
+// bounds = [left, top, right, bottom]
+export function floorplanBox(floorplan, dock, dark) {
+  const bounds = (floorplan?.bounds || []).map(Number);
+  if (!floorplan?.image || bounds.length !== 4 || bounds.some((v) => !Number.isFinite(v)) || !dock) return null;
+  const [left, top, right, bottom] = bounds;
+  if (right <= left || bottom <= top) return null;
+  return {
+    href: dark && floorplan.dark_image ? floorplan.dark_image : floorplan.image,
+    x: dock[0] + left / PIXEL_M,
+    y: dock[1] + top / PIXEL_M,
+    width: (right - left) / PIXEL_M,
+    height: (bottom - top) / PIXEL_M,
+  };
+}
+
 function relTime(iso, lang) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -881,7 +897,8 @@ class LefantVacuumCard extends HTMLElement {
       return s ? `${s.state}|${s.attributes.fan_speed ?? ""}|${s.attributes.status ?? ""}|${JSON.stringify(s.attributes.cleaning_job ?? "")}` : "-";
     });
     return [parts.join(","), this._selected.join("."), this._passes, this._busy, this._message, this._error,
-      this._showRoute, this._wide, this._data ? this._fetched : 0, this._edv, this._view?.join(","), this._confirmPart, this._lang].join("#");
+      this._showRoute, this._wide, this._data ? this._fetched : 0, this._edv, this._view?.join(","), this._confirmPart, this._lang,
+      this._hass.themes?.darkMode].join("#");
   }
 
   _render() {
@@ -1065,6 +1082,7 @@ class LefantVacuumCard extends HTMLElement {
       return `<g class="label" data-action="room" data-value="${r.id}">${badge}<text x="${x}" y="${y}" class="room-name">${esc(r.name)}</text><text x="${x}" y="${y + 9}" class="room-area">${r.area} m²</text></g>`;
     }).join("");
     const [dx, dy] = map.dock;
+    const plan = floorplanBox(this._config.floorplan, map.dock, this._hass.themes?.darkMode);
     const vb = this._view || this._fitBox?.box || [-6, -20, map.width + 12, map.height + 26];
     const tools = ed ? this._editBar() : `
         <div class="map-tools">
@@ -1075,7 +1093,7 @@ class LefantVacuumCard extends HTMLElement {
     const note = ed ? this._editContext()
       : `<div class="map-note">${esc(this._mapNote())}</div>`;
     return `
-      <div class="map ${!ed && sel.size ? "has-selection" : ""} ${progress ? "job" : ""} ${ed ? `editing tool-${ed.tool}` : ""}">
+      <div class="map ${!ed && sel.size ? "has-selection" : ""} ${progress ? "job" : ""} ${ed ? `editing tool-${ed.tool}` : ""} ${plan ? "plan" : ""}">
         ${ed ? tools : ""}
         <div class="canvas">
           <svg viewBox="${vb.join(" ")}" preserveAspectRatio="xMidYMid meet">
@@ -1084,6 +1102,7 @@ class LefantVacuumCard extends HTMLElement {
               ${roomPaths}
             </g>
             <path class="walls" d="${map.walls}"/>
+            ${plan ? `<image class="floorplan" href="${esc(plan.href)}" x="${plan.x}" y="${plan.y}" width="${plan.width}" height="${plan.height}" preserveAspectRatio="none"/>` : ""}
             ${this._showRoute && map.route && !ed && !job ? `<path class="route" d="${map.route}"/>` : ""}
             <g class="dock"><circle cx="${dx}" cy="${dy}" r="6"/><path d="M${dx - 3} ${dy + 2.5}v-3l3-2.5 3 2.5v3z"/></g>
             ${map.robot ? `<g class="bot"><circle cx="${map.robot[0]}" cy="${map.robot[1]}" r="5"/><circle cx="${map.robot[0]}" cy="${map.robot[1]}" r="2"/></g>` : ""}
@@ -2153,6 +2172,9 @@ const STYLE = `
   .empty-map { display: grid; place-items: center; gap: 8px; padding: 48px 16px; text-align: center; color: var(--secondary-text-color); --mdc-icon-size: 40px; }
   .floor { fill: color-mix(in srgb, var(--primary-text-color) 12%, transparent); }
   .walls { fill: var(--primary-text-color); opacity: 0.75; pointer-events: none; }
+  /* a floor plan goes over the rooms with transparent floors: its walls cover the robot's, furniture stays faint */
+  .plan .walls { opacity: 0.25; }
+  .floorplan { pointer-events: none; }
   .room { fill: var(--room); fill-opacity: 0.55; cursor: pointer; transition: fill-opacity .15s; }
   .room:hover { fill-opacity: 0.75; }
   .has-selection .room { fill-opacity: 0.22; }

@@ -24,7 +24,7 @@ async def test_setup_and_unload(hass: HomeAssistant, entry: MockConfigEntry) -> 
     assert hass.states.get("binary_sensor.lefant_m5_max_clean_water_tank").state == "off"
     assert hass.states.get("select.lefant_m5_max_water_level").state == "low"
     assert hass.states.get("switch.lefant_m5_max_carpet_boost").state == "on"
-    # the map entity needs the cloud project
+    # the map entity needs the cloud project or a map saved from an earlier run
     assert hass.states.get("image.lefant_m5_max_last_cleaning_map") is None
 
     assert await hass.config_entries.async_unload(entry.entry_id)
@@ -115,10 +115,17 @@ async def test_cleaning_job(hass: HomeAssistant, entry: MockConfigEntry, fake_de
     assert (job["scope"], job["rooms"], job["repeats"], job["mop_washes"]) == ("rooms", [1], 2, 1)
     assert hass.states.get(VACUUM).state == "cleaning"
 
+    assert hass.states.get("sensor.lefant_m5_max_last_cleaning").state == "unavailable"
+
+    device.on_dps({protocol.DP_CLEAN_TIME: 25, protocol.DP_CLEAN_AREA: 12})
     device.on_dps({protocol.DP_STATUS: "goto_charge"})
     await hass.async_block_till_done()
     assert hass.states.get(VACUUM).attributes["cleaning_job"] is None
     assert hass.states.get(VACUUM).state == "returning"
+    # without the cloud the last cleaning comes from the robot's counters
+    assert hass.states.get("sensor.lefant_m5_max_last_cleaning_duration").state == "25"
+    assert hass.states.get("sensor.lefant_m5_max_last_cleaning_area").state == "12"
+    assert hass.states.get("sensor.lefant_m5_max_last_cleaning").attributes["rooms"] == ["Kitchen"]
 
 
 async def test_usage_counters(hass: HomeAssistant, entry: MockConfigEntry, fake_device: list[FakeDevice]) -> None:
