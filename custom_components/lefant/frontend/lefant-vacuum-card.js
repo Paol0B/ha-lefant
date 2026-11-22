@@ -156,7 +156,7 @@ export const STRINGS = {
     whole_house: "Whole house",
     job_other: "Rooms chosen in the Lefant app or by a schedule",
     job_hint: "The robot does not report which room it is in right now.",
-    job_estimate_hint: "Estimate: the robot does not report where it is. It cleans the rooms in the order chosen, so the card compares the m² cleaned with the area of each room.",
+    job_estimate_hint: "Estimated from the m² cleaned: the robot does not report where it is.",
     job_room: { done: "done", current: "in progress", todo: "to do" },
     estimated_room: "probably {room}",
     map_note: "Map saved from the last full cleaning. Tap the rooms to clean.",
@@ -180,9 +180,6 @@ export const STRINGS = {
     dock: "Dock",
     locate: "Locate",
     passes: "Passes",
-    rooms: "Rooms",
-    selected: "{n} selected, cleaned in this order",
-    none_selected: "none selected: cleans the whole house",
     fan_title: "Fan speed",
     water_title: "Water level",
     hint_off: "Fan and water off: the robot does not clean.",
@@ -208,6 +205,11 @@ export const STRINGS = {
     confirm: "Confirm?",
     maintenance: "Maintenance",
     maint_hint: "The robot does not report wear: Home Assistant counts cleaning hours and emptyings since you last pressed Replaced.",
+    fan_short: "Suction",
+    water_short: "Water",
+    all_ok: "All OK",
+    to_check: "Check {what}",
+    maint_since: "{h} h of cleaning since replaced",
     today_at: "today at {time}",
     yesterday_at: "yesterday at {time}",
     date_at: "{date} at {time}",
@@ -424,7 +426,7 @@ export const STRINGS = {
     whole_house: "Tutta la casa",
     job_other: "Stanze scelte dall'app Lefant o da una programmazione",
     job_hint: "Il robot non comunica in quale stanza si trova in questo momento.",
-    job_estimate_hint: "Stima: il robot non comunica dove si trova. Pulisce le stanze nell'ordine scelto, quindi la scheda confronta i m² puliti con l'area di ogni stanza.",
+    job_estimate_hint: "Stima dai m² puliti: il robot non dice dove si trova.",
     job_room: { done: "fatta", current: "in corso", todo: "da fare" },
     estimated_room: "probabilmente {room}",
     map_note: "Mappa salvata dall'ultima pulizia completa. Tocca le stanze da pulire.",
@@ -448,9 +450,6 @@ export const STRINGS = {
     dock: "Base",
     locate: "Trova",
     passes: "Passate",
-    rooms: "Stanze",
-    selected: "{n} selezionate, pulite in quest'ordine",
-    none_selected: "nessuna selezionata: pulisce tutta la casa",
     fan_title: "Aspirazione",
     water_title: "Acqua del mop",
     hint_off: "Aspirazione e acqua spente: il robot non pulisce.",
@@ -476,6 +475,11 @@ export const STRINGS = {
     confirm: "Confermi?",
     maintenance: "Manutenzione",
     maint_hint: "Il robot non manda l'usura dei pezzi: Home Assistant conta le ore di pulizia e gli svuotamenti da quando premi Sostituito.",
+    fan_short: "Aspira",
+    water_short: "Acqua",
+    all_ok: "Tutto OK",
+    to_check: "Controlla {what}",
+    maint_since: "{h} h di pulizia dal cambio",
     today_at: "oggi alle {time}",
     yesterday_at: "ieri alle {time}",
     date_at: "{date} alle {time}",
@@ -710,6 +714,9 @@ class LefantVacuumCard extends HTMLElement {
     this._message = null;
     this._data = null;
     this._showRoute = storageGet("lefant-card-route", false);
+    // sections the viewer opened (base, maintenance, settings), kept in this browser
+    this._open = new Set(storageGet("lefant-card-open", []));
+    this._modeOpen = null; // "suction" or "water" while its options are shown
     this._sig = "";
     this._ed = null; // map editor state, null when not editing
     this._edv = 0; // bumped on every editor change, part of the render signature
@@ -841,6 +848,24 @@ class LefantVacuumCard extends HTMLElement {
         this._sig = "";
         this._render();
         break;
+      case "whole":
+        this._selected = [];
+        this._sig = "";
+        this._render();
+        break;
+      case "fold":
+      case "unfold":
+        if (action === "fold" && this._open.has(value)) this._open.delete(value);
+        else this._open.add(value);
+        storageSet("lefant-card-open", [...this._open]);
+        this._sig = "";
+        this._render();
+        break;
+      case "mode-open":
+        this._modeOpen = this._modeOpen === value ? null : value;
+        this._sig = "";
+        this._render();
+        break;
       case "route":
         this._showRoute = !this._showRoute;
         storageSet("lefant-card-route", this._showRoute);
@@ -879,9 +904,11 @@ class LefantVacuumCard extends HTMLElement {
         this._call("call.locate", "vacuum", "locate", vacuum);
         break;
       case "suction":
+        this._modeOpen = null;
         this._call("call.suction", "vacuum", "set_fan_speed", { ...vacuum, fan_speed: value });
         break;
       case "water":
+        this._modeOpen = null;
         this._call("call.water", "select", "select_option", { entity_id: this._data.entities["10"], option: value });
         break;
       case "setting": {
@@ -922,6 +949,7 @@ class LefantVacuumCard extends HTMLElement {
     });
     return [parts.join(","), this._selected.join("."), this._passes, this._busy, this._message, this._error,
       this._showRoute, this._wide, this._data ? this._fetched : 0, this._edv, this._view?.join(","), this._confirmPart, this._lang,
+      [...this._open].join("."), this._modeOpen,
       this._hass.themes?.darkMode].join("#");
   }
 
@@ -969,22 +997,69 @@ class LefantVacuumCard extends HTMLElement {
       return `<div class="empty">${this._t("not_connected")}</div>`;
     }
     if (this._error && !this._data) return `<div class="empty">${this._t("map_error", { error: esc(this._error) })}</div>`;
+    // what to clean, how, go; while it cleans, what it is doing; the rest folded at the bottom
+    const running = !this._ed && this._running(vac);
+    const now = running ? this._progress(vac) : "";
     return `
       ${this._header(vac)}
       <div class="main">
+        ${now && !this._wide ? now : ""}
         <div class="map-col">${this._mapPanel()}</div>
         <div class="side">
           ${this._ed ? this._editSide() : `
-          ${this._actions(vac)}
-          ${this._roomsPanel()}
+          ${now && this._wide ? now : ""}
+          ${running ? "" : this._startPanel(vac)}
           ${this._modes(vac)}
-          ${this._progress(vac)}
-          ${this._lastCleaning()}
-          ${this._base(vac)}
-          ${this._maintenance()}
-          ${this._settings()}`}
+          ${running ? "" : this._lastCleaning()}
+          ${this._folds(vac)}`}
         </div>
       </div>`;
+  }
+
+  _running(vac) {
+    const status = this._status(vac);
+    return !!this._jobInfo(vac) || CLEANING.has(status) || PAUSED.has(status) || RETURNING.has(status);
+  }
+
+  _folds(vac) {
+    const base = this._baseSummary(vac);
+    const folds = [
+      this._fold("base", base.alert ? "mdi:home-alert-outline" : "mdi:home-outline", this._t("dock"), base.text, this._base(vac), base.alert),
+      this._fold("maintenance", "mdi:wrench-outline", this._t("maintenance"), this._maintSummary(), this._maintenance()),
+      this._fold("settings", "mdi:tune-variant", this._t("settings.title"), "", this._settings()),
+    ].join("");
+    return folds ? `<div class="folds">${folds}</div>` : "";
+  }
+
+  // a section closed to one row with its summary; the panel inside keeps its own rows
+  _fold(id, icon, title, summary, content, alert = false) {
+    if (!content) return "";
+    const open = this._open.has(id);
+    return `
+      <div class="fold ${open ? "open" : ""} ${alert ? "alert" : ""}">
+        <button class="fold-head" data-action="fold" data-value="${id}" aria-expanded="${open}">
+          <ha-icon icon="${icon}"></ha-icon><span class="fold-title">${esc(title)}</span>
+          <span class="fold-sum">${esc(summary)}</span><ha-icon class="chev" icon="mdi:chevron-down"></ha-icon>
+        </button>
+        ${open ? `<div class="fold-body">${content}</div>` : ""}
+      </div>`;
+  }
+
+  _baseSummary() {
+    const alerts = BASE.filter(([key]) => this._state(key)?.state === "on").map(([, label]) => this._t(label).toLowerCase());
+    if (alerts.length) return { text: this._t("to_check", { what: alerts.join(", ") }), alert: true };
+    const known = BASE.some(([key]) => ["on", "off"].includes(this._state(key)?.state));
+    return { text: known ? this._t("all_ok") : "", alert: false };
+  }
+
+  _maintSummary() {
+    const hours = ["main_brush", "side_brush", "filter", "mop"].map((part) => {
+      const st = this._state(`${part}_usage`);
+      const value = Number(st?.state);
+      return isNaN(value) ? 0 : st.attributes.unit_of_measurement === "min" ? value / 60 : value;
+    });
+    const h = Math.max(...hours);
+    return h ? this._t("maint_since", { h: Math.round(h) }) : "";
   }
 
   _header(vac) {
@@ -1002,6 +1077,7 @@ class LefantVacuumCard extends HTMLElement {
           <div class="name">${esc(this._config.title || vac.attributes.friendly_name || "Robot")}</div>
           <div class="status">${unavailable ? this._t("unavailable") : esc(this._statusText(vac, status))}</div>
         </div>
+        <button class="icon-btn" data-action="locate" title="${this._t("locate")}" aria-label="${this._t("locate")}" ${this._offline(vac) || this._busy ? "disabled" : ""}>${this._busy === "call.locate" ? `<span class="spinner"></span>` : `<ha-icon icon="mdi:map-marker-radius"></ha-icon>`}</button>
         <div class="battery" data-action="more" data-value="battery"><ha-icon icon="${batIcon}"></ha-icon>${bat === null ? "-" : `${bat}%`}</div>
       </div>
       ${chips.length ? `<div class="chips">${chips.join("")}</div>` : ""}
@@ -1079,7 +1155,7 @@ class LefantVacuumCard extends HTMLElement {
     const mop = this._state("171");
     if (mop) chips.push(`<span class="chip ${mop.state === "on" ? "" : "warn"}"><ha-icon icon="${mop.state === "on" ? "mdi:water" : "mdi:water-off"}"></ha-icon>${mop.state === "on" ? this._t("mop_on") : this._t("mop_missing")}</span>`);
     const baseAlerts = BASE.filter(([key]) => this._state(key)?.state === "on").map(([, label]) => this._t(label).toLowerCase());
-    if (baseAlerts.length) chips.push(`<span class="chip warn"><ha-icon icon="mdi:home-alert-outline"></ha-icon>${this._t("dock_alert", { alerts: esc(baseAlerts.join(", ")) })}</span>`);
+    if (baseAlerts.length) chips.push(`<span class="chip warn" data-action="unfold" data-value="base"><ha-icon icon="mdi:home-alert-outline"></ha-icon>${this._t("dock_alert", { alerts: esc(baseAlerts.join(", ")) })}</span>`);
     // codes without a known meaning: shown as they come
     const alarm = Number(this._state("alarm_code")?.state);
     if (alarm && alarm !== BAG_ALARM) {
@@ -1670,84 +1746,87 @@ class LefantVacuumCard extends HTMLElement {
     this._bump();
   }
 
-  _actions(vac) {
+  // buttons for a cleaning under way: pause or resume, stop, back to the dock
+  _controls(vac) {
     const status = this._status(vac);
     const off = this._offline(vac) || this._busy ? "disabled" : "";
     const busy = (label) => (this._busy === label ? `<span class="spinner"></span>` : "");
-    const n = this._selected.length;
     const job = this._jobInfo(vac);
     // asleep after a pause the cleaning is not over
     const paused = PAUSED.has(status) || (job && HELD.has(status));
     let primary;
-    let secondary = [];
-    // between two mop washes the robot reports "charging" for a moment: the cleaning is still running
-    if (!paused && (CLEANING.has(status) || (job && !RETURNING.has(status)))) {
-      primary = `<button class="primary" data-action="pause" ${off}>${busy("call.pause")}<ha-icon icon="mdi:pause"></ha-icon>${this._t("call.pause")}</button>`;
-      secondary = ["stop", "dock"];
-    } else if (paused) {
+    let secondary;
+    if (paused) {
       primary = `<button class="primary" data-action="resume" ${off}>${busy("call.resume")}<ha-icon icon="mdi:play"></ha-icon>${this._t("resume")}</button>`;
       secondary = ["stop", "dock"];
     } else if (RETURNING.has(status)) {
       primary = `<button class="primary" data-action="pause" ${off}>${busy("call.pause")}<ha-icon icon="mdi:pause"></ha-icon>${this._t("stop_return")}</button>`;
       secondary = ["stop"];
     } else {
-      const label = n ? (n === 1 ? this._t("clean_one") : this._t("clean_many", { n })) : this._t("clean_all");
-      primary = `<button class="primary" data-action="start" ${off}>${busy("call.start")}<ha-icon icon="mdi:play"></ha-icon>${label}</button>`;
-      secondary = this._docked() ? [] : ["dock"];
+      // between two mop washes the robot reports "charging" for a moment: the cleaning is still running
+      primary = `<button class="primary" data-action="pause" ${off}>${busy("call.pause")}<ha-icon icon="mdi:pause"></ha-icon>${this._t("call.pause")}</button>`;
+      secondary = ["stop", "dock"];
     }
     const sec = {
       stop: `<button data-action="stop" ${off}>${busy("call.stop")}<ha-icon icon="mdi:stop"></ha-icon>${this._t("call.stop")}</button>`,
       dock: `<button data-action="dock" ${off}>${busy("call.dock")}<ha-icon icon="mdi:home-import-outline"></ha-icon>${this._t("dock")}</button>`,
     };
-    return `
-      <div class="panel actions">
-        ${primary}
-        <div class="row">
-          ${secondary.map((k) => sec[k]).join("")}
-          <button data-action="locate" ${off}>${busy("call.locate")}<ha-icon icon="mdi:map-marker-radius"></ha-icon>${this._t("locate")}</button>
-        </div>
-      </div>`;
+    return `<div class="controls">${primary}${secondary.map((k) => sec[k]).join("")}</div>`;
   }
 
-  _roomsPanel() {
+  // what to clean (the whole house or rooms, also tapped on the map) and the button that starts it
+  _startPanel(vac) {
+    const off = this._offline(vac) || this._busy ? "disabled" : "";
+    const busy = (label) => (this._busy === label ? `<span class="spinner"></span>` : "");
     const rooms = this._data?.rooms || [];
-    if (!rooms.length) return "";
-    const status = this._status(this._state("vacuum"));
-    const idle = !CLEANING.has(status) && !PAUSED.has(status) && !RETURNING.has(status);
+    const n = this._selected.length;
     const chips = rooms.map((r) => {
       const order = this._selected.indexOf(r.id);
       return `<button class="room-chip ${order >= 0 ? "on" : ""}" data-action="room" data-value="${r.id}" style="--room:${ROOM_COLORS[r.id % ROOM_COLORS.length]}">
-        ${order >= 0 ? `<span class="num">${order + 1}</span>` : `<span class="dot"></span>`}${esc(r.name)}${r.area ? `<span class="muted">${r.area} m²</span>` : ""}</button>`;
+        ${order >= 0 ? `<span class="num">${order + 1}</span>` : `<span class="dot"></span>`}${esc(r.name)}</button>`;
     }).join("");
-    const passes = this._selected.length && idle
+    const passes = n
       ? `<div class="sub">${this._t("passes")} <span class="seg small">${[1, 2, 3].map((p) => `<button class="${p === this._passes ? "on" : ""}" data-action="passes" data-value="${p}">${p}×</button>`).join("")}</span></div>`
       : "";
+    const label = n ? (n === 1 ? this._t("clean_one") : this._t("clean_many", { n })) : this._t("clean_all");
     return `
-      <div class="panel">
-        <div class="panel-title">${this._t("rooms")}<span class="muted">${this._selected.length ? this._t("selected", { n: this._selected.length }) : this._t("none_selected")}</span></div>
-        <div class="room-chips">${chips}</div>
+      <div class="panel start">
+        ${rooms.length ? `<div class="room-chips">
+          <button class="room-chip whole ${n ? "" : "on"}" data-action="whole"><ha-icon icon="mdi:home-outline"></ha-icon>${this._t("whole_house")}</button>
+          ${chips}
+        </div>` : ""}
         ${passes}
+        <button class="primary" data-action="start" ${off}>${busy("call.start")}<ha-icon icon="mdi:play"></ha-icon>${label}</button>
+        ${this._docked() ? "" : `<button class="plain" data-action="dock" ${off}>${busy("call.dock")}<ha-icon icon="mdi:home-import-outline"></ha-icon>${this._t("dock")}</button>`}
       </div>`;
   }
 
+  // suction and water as two buttons; the options open under the one tapped
   _modes(vac) {
     const fan = vac.attributes.fan_speed;
     const water = this._state("10")?.state;
     const off = this._offline(vac) || this._busy ? "disabled" : "";
     const seg = (items, current, action) => `<div class="seg">${items.map(([v, label, icon]) =>
       `<button class="${v === current ? "on" : ""}" data-action="${action}" data-value="${v}" ${off}><ha-icon icon="${icon}"></ha-icon><span>${this._t(label)}</span></button>`).join("")}</div>`;
+    const pick = (items, current) => items.find(([v]) => v === current);
+    const mode = (key, short, items, current) => {
+      const item = pick(items, current);
+      return `<button class="mode ${this._modeOpen === key ? "on" : ""}" data-action="mode-open" data-value="${key}" aria-expanded="${this._modeOpen === key}">
+        <ha-icon icon="${item ? item[2] : "mdi:help"}"></ha-icon><span>${this._t(short)}: <b>${item ? this._t(item[1]) : "-"}</b></span></button>`;
+    };
     let hint = "";
     if (fan === "closed" && water === "closed") hint = this._t("hint_off");
     else if (fan === "closed") hint = this._t("hint_mop");
     else if (water === "closed" || this._state("171")?.state === "off") hint = this._t("hint_vacuum");
     else hint = this._t("hint_both");
+    const open = this._modeOpen === "suction" ? seg(SUCTION, fan, "suction") : this._modeOpen === "water" ? seg(WATER, water, "water") : "";
     return `
-      <div class="panel">
-        <div class="panel-title">${this._t("fan_title")}</div>
-        ${seg(SUCTION, fan, "suction")}
-        <div class="panel-title">${this._t("water_title")}</div>
-        ${seg(WATER, water, "water")}
-        <div class="hint">${hint}</div>
+      <div class="modes">
+        <div class="mode-row">
+          ${mode("suction", "fan_short", SUCTION, fan)}
+          ${water !== undefined ? mode("water", "water_short", WATER, water) : ""}
+        </div>
+        ${open ? `${open}<div class="hint">${hint}</div>` : ""}
       </div>`;
   }
 
@@ -1774,6 +1853,7 @@ class LefantVacuumCard extends HTMLElement {
           ${job?.washes ? `<div><ha-icon icon="mdi:water-sync"></ha-icon><b>${job.washes}</b> ${job.washes === 1 ? this._t("wash_one") : this._t("wash_many")}</div>` : ""}
         </div>
         ${job?.hint ? `<div class="hint">${esc(job.hint)}</div>` : ""}
+        ${this._controls(vac)}
       </div>`;
   }
 
@@ -1784,14 +1864,9 @@ class LefantVacuumCard extends HTMLElement {
     const rooms = !last.rooms ? "" : last.rooms.length
       ? last.rooms.map((id) => names[id] || last.names?.[id] || this._t("room", { id })).join(", ") : this._t("whole_house").toLowerCase();
     return `
-      <div class="panel last" data-action="more" data-value="${this._lastCleaningKey()}">
-        <div class="panel-title">${this._t("last_cleaning")}<span class="muted">${esc(relTime(last.end, this._lang))}</span></div>
-        <div class="stats">
-          <div><ha-icon icon="mdi:timer-check-outline"></ha-icon><b>${last.minutes}</b> min</div>
-          <div><ha-icon icon="mdi:texture-box"></ha-icon><b>${last.area}</b> m²</div>
-        </div>
-        ${rooms ? `<div class="muted">${esc(rooms)}</div>` : ""}
-        ${this._history()}
+      <div class="last" data-action="more" data-value="${this._lastCleaningKey()}">
+        <ha-icon icon="mdi:history"></ha-icon>
+        <span class="text">${this._t("last_cleaning")} ${esc(relTime(last.end, this._lang))} · ${last.minutes} min · ${last.area} m²${rooms ? `<span class="muted">${esc(rooms)}</span>` : ""}${this._history()}</span>
       </div>`;
   }
 
@@ -1959,6 +2034,12 @@ class RoborockVacuumCard extends LefantVacuumCard {
 
   _resetEntity(part) {
     return this._data?.entities?.[`reset_${RR_RESET[part]}_consumable`];
+  }
+
+  _baseSummary() {
+    const dock = this._state("dock_error");
+    if (!dock || ["unknown", "unavailable"].includes(dock.state)) return { text: "", alert: false };
+    return dock.state === "ok" ? { text: this._t("all_ok"), alert: false } : { text: this._hass.formatEntityState(dock), alert: true };
   }
 
   _cleanRooms(rooms, repeats) {
@@ -2253,11 +2334,35 @@ const STYLE = `
   .panel-title { font-weight: 600; font-size: 14px; color: var(--primary-text-color); display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
   .muted { color: var(--secondary-text-color); font-weight: 400; font-size: 12px; }
   .hint { font-size: 12px; color: var(--secondary-text-color); }
-  .actions .primary { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px; border-radius: 12px;
+  .start .primary, .controls .primary { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px; border-radius: 12px;
     background: var(--primary-color); color: var(--text-primary-color, #fff); font-weight: 600; font-size: 16px; }
-  .actions .row { display: flex; gap: 8px; }
-  .actions .row button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; border-radius: 12px; font-size: 12px;
-    background: color-mix(in srgb, var(--primary-text-color) 7%, transparent); color: var(--primary-text-color); }
+  .controls { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 8px; }
+  .controls .primary { padding: 10px; font-size: 14px; }
+  .controls button:not(.primary), .start .plain { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 4px; border-radius: 12px;
+    font-size: 13px; background: color-mix(in srgb, var(--primary-text-color) 7%, transparent); color: var(--primary-text-color); --mdc-icon-size: 18px; }
+  .room-chip.whole { --mdc-icon-size: 16px; }
+  .modes { display: grid; gap: 8px; }
+  .mode-row { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+  .mode { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; font-size: 13px; text-align: left; min-width: 0;
+    background: color-mix(in srgb, var(--primary-text-color) 4%, transparent); color: var(--primary-text-color); --mdc-icon-size: 20px; }
+  .mode ha-icon { color: var(--primary-color); flex: none; }
+  .mode b { font-weight: 600; }
+  .mode.on { box-shadow: inset 0 0 0 1px var(--primary-color); }
+  .last { display: flex; align-items: flex-start; gap: 10px; padding: 2px 4px; font-size: 13px; color: var(--primary-text-color); cursor: pointer; --mdc-icon-size: 18px; }
+  .last ha-icon { color: var(--secondary-text-color); flex: none; }
+  .last .text { display: grid; gap: 2px; }
+  .folds { display: grid; border-radius: 14px; background: color-mix(in srgb, var(--primary-text-color) 4%, transparent); }
+  .fold + .fold { border-top: 1px solid var(--divider-color); }
+  .fold-head { width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px; text-align: left; color: var(--primary-text-color); --mdc-icon-size: 20px; }
+  .fold-title { font-weight: 600; font-size: 14px; flex: none; }
+  .fold-sum { flex: 1; min-width: 0; text-align: right; font-size: 12px; color: var(--secondary-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fold.alert .fold-sum, .fold.alert .fold-head > ha-icon:first-child { color: var(--warning-color); font-weight: 600; }
+  .fold .chev { color: var(--secondary-text-color); flex: none; transition: transform .15s; }
+  .fold.open .chev { transform: rotate(180deg); }
+  .fold-body > .panel { background: none; padding: 0 12px 12px; }
+  .fold-body > .panel > .panel-title:first-child { display: none; }
+  .icon-btn { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; flex: none; color: var(--secondary-text-color); --mdc-icon-size: 22px; }
+  .chip[data-action] { cursor: pointer; }
   .room-chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .room-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; font-size: 13px;
     background: var(--card-background-color, #fff); color: var(--primary-text-color); border: 1px solid var(--divider-color); }

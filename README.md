@@ -61,7 +61,7 @@ To rename rooms, open the integration's **Configure** dialog. Names stay in Home
 The integration serves the card, but Home Assistant needs it as a dashboard resource:
 
 1. **Settings > Dashboards**, menu **Resources** (it needs advanced mode in your user profile).
-2. Add `/lefant_static/lefant-vacuum-card.js?v=0.8.0` as **JavaScript module**.
+2. Add `/lefant_static/lefant-vacuum-card.js?v=0.8.1` as **JavaScript module**.
 3. Add the card to a dashboard:
 
 ```yaml
