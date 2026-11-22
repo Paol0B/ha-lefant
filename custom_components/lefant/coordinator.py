@@ -38,6 +38,8 @@ FRESH_JOB = 60
 OFFLINE_GRACE = timedelta(minutes=10)
 # the robot passes the base alerts on while it rests on the dock; leaving or away it reports them all clear
 BASE_READ_STATUSES = protocol.DOCKED_STATUSES | {"wash_mop"} | protocol.HELD_STATUSES
+# an alert still there comes back within 3 s of docking; all clear, the robot may send nothing
+BASE_SETTLE = 15
 # seconds between a start sent by HA and the robot reporting that it is cleaning
 REQUEST_WINDOW = 120
 # pushed only on some events (room list, no-go areas, base alerts): saved so that HA starts with them without the cloud
@@ -75,6 +77,7 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.connected_event = asyncio.Event()
         self.offline_since: datetime | None = None
         self._offline_timer: CALLBACK_TYPE | None = None
+        self._base_timer: CALLBACK_TYPE | None = None
         self._stopped = False
         self.robot_rooms: dict[int, str] = {}
         self.areas: list[dict[str, Any]] = []
@@ -172,13 +175,37 @@ class LefantCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """The entry unloads: the device thread reports the disconnection afterwards."""
         self._stopped = True
         self._cancel_offline_timer()
+        self._cancel_base_timer()
+
+    @callback
+    def _cancel_base_timer(self) -> None:
+        if self._base_timer:
+            self._base_timer()
+            self._base_timer = None
+
+    @callback
+    def _base_settled(self, _now: datetime) -> None:
+        """Docked without a base report: the alerts kept from before are over."""
+        self._base_timer = None
+        if not (flags := protocol.parse_base_state((self.data or {}).get(protocol.DP_BASE_STATE))) or not any(flags):
+            return
+        clear = protocol.encode(b"\x01" + bytes(len(flags)))
+        self._saved_dps[protocol.DP_BASE_STATE] = clear
+        self._save_state()
+        self.async_set_updated_data({**(self.data or {}), protocol.DP_BASE_STATE: clear})
 
     @callback
     def async_handle_dps(self, dps: dict[str, Any]) -> None:
         previous = self.status
+        was_docked = (self.data or {}).get(protocol.DP_ON_DOCK)
         if protocol.DP_BASE_STATE in dps and not self._at_base({**(self.data or {}), **dps}):
             # keep what the base said last
             dps = {k: v for k, v in dps.items() if k != protocol.DP_BASE_STATE}
+        if protocol.DP_BASE_STATE in dps or dps.get(protocol.DP_ON_DOCK) is False:
+            self._cancel_base_timer()
+        elif dps.get(protocol.DP_ON_DOCK) is True and was_docked is False and not self._stopped:
+            self._cancel_base_timer()
+            self._base_timer = async_call_later(self.hass, BASE_SETTLE, self._base_settled)
         if protocol.DP_ROOMS in dps:
             if (rooms := protocol.parse_rooms(dps[protocol.DP_ROOMS])) and rooms != self.robot_rooms:
                 if self.robot_rooms and set(rooms) != set(self.robot_rooms) and not self._editing:

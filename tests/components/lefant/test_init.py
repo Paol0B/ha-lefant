@@ -11,7 +11,7 @@ from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 
 from custom_components.lefant import protocol
 from custom_components.lefant.const import DOMAIN
-from custom_components.lefant.coordinator import DOCK_PAUSE
+from custom_components.lefant.coordinator import BASE_SETTLE, DOCK_PAUSE
 
 from . import DEVICE_ID, ENTRY_DATA, FakeDevice
 
@@ -221,6 +221,7 @@ async def test_job_goes_on_after_a_pause(hass: HomeAssistant, entry: MockConfigE
     device.on_connection(True)
     _feed(
         device,
+        {s: "sleep", dock: True}, {s: "wash_mop"}, {s: "paused", dock: False}, {s: "sleep"},
         {s: "sleep", dock: True}, {s: "paused"}, {s: "charging"}, {s: "wash_mop"}, {s: "charging"},
         {s: "smart", dock: False}, {t: 2},
     )
@@ -300,7 +301,17 @@ async def test_base_alerts_kept_away_from_the_dock(
     _feed(device, {protocol.DP_STATUS: "relocating", protocol.DP_BASE_STATE: clear}, {protocol.DP_ON_DOCK: False})
     await hass.async_block_till_done()
     assert hass.states.get(sensor).state == "on"
-    _feed(device, {protocol.DP_STATUS: "charging", protocol.DP_ON_DOCK: True}, {protocol.DP_BASE_STATE: clear})
+    # back at the dock the alert comes again within seconds when it is still there
+    _feed(device, {protocol.DP_STATUS: "charging", protocol.DP_ON_DOCK: True}, {protocol.DP_BASE_STATE: bag})
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=BASE_SETTLE + 1))
+    await hass.async_block_till_done()
+    assert hass.states.get(sensor).state == "on"
+    _feed(device, {protocol.DP_STATUS: "relocating", protocol.DP_BASE_STATE: clear}, {protocol.DP_ON_DOCK: False})
+    # fixed while the robot was away: docked, the robot may send no all clear
+    _feed(device, {protocol.DP_STATUS: "charging", protocol.DP_ON_DOCK: True})
+    await hass.async_block_till_done()
+    assert hass.states.get(sensor).state == "on"
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=BASE_SETTLE + 1))
     await hass.async_block_till_done()
     assert hass.states.get(sensor).state == "off"
 
