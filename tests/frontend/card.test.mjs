@@ -9,7 +9,7 @@ globalThis.customElements = { get: () => undefined, define: () => {} };
 globalThis.window = globalThis;
 globalThis.document = { querySelector: () => null };
 
-const { STRINGS, langOf, roomProgress, translate } = await import(cardUrl);
+const { STRINGS, langOf, placeLabels, roomProgress, translate } = await import(cardUrl);
 
 test("Italian for it and it-IT, English for any other language", () => {
   const lang = (language) => langOf({ locale: { language } });
@@ -43,6 +43,25 @@ test("every key the card uses exists in both languages", () => {
   for (const key of [...direct, ...columns]) {
     for (const lang of ["en", "it"]) assert.notEqual(translate(lang, key), undefined, `${lang}: ${key}`);
   }
+});
+
+test("labels of rooms side by side are pushed apart, the others stay put", () => {
+  const rooms = [
+    { id: 1, name: "Big bathroom", area: 7.9, label: [160, 38] },
+    { id: 2, name: "Small bathroom", area: 4.2, label: [200, 38] },
+    { id: 3, name: "Kitchen", area: 17.7, label: [300, 70] },
+  ];
+  for (const wide of [true, false]) {
+    const spots = placeLabels(rooms, wide);
+    assert.deepEqual(spots[3], [300, 70]);
+    const [[x1, y1], [x2, y2]] = [spots[1], spots[2]];
+    // apart along x (beyond half of both name widths) or along y (beyond one label height)
+    const size = wide ? 8.5 : 11;
+    const apart = Math.abs(x1 - x2) >= ((12 + 14) * size * 0.6 + 8) / 2 - 1e-9 || Math.abs(y1 - y2) >= (wide ? 31 : 23) - 1e-9;
+    assert.ok(apart, `${wide}: ${spots[1]} ${spots[2]}`);
+    assert.ok(x1 <= 160 && x2 >= 200 && y1 === 38 && y2 >= 38, "they move apart, never up");
+  }
+  assert.deepEqual(placeLabels([], true), {});
 });
 
 test("room in progress estimated from the area cleaned, in the order sent", () => {

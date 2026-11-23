@@ -563,6 +563,41 @@ export function roomProgress(order, areas, cleaned, repeats = 1) {
 
 const JOB_ROOM_ICONS = { done: "mdi:check-circle", current: "mdi:robot-vacuum", todo: "mdi:circle-outline" };
 
+// Each label sits near the middle of its room, so the names of two small rooms side by side can cover each
+// other: overlapping labels are pushed apart along the axis that needs the shorter move. Sizes in map pixels,
+// from the label styles: name 8.5 (11 on a narrow card, without the area line), badge above, area line below.
+export function placeLabels(rooms, wide) {
+  const size = wide ? 8.5 : 11;
+  const height = wide ? 31 : 23;
+  const spots = rooms.map((r) => ({
+    id: r.id, x: r.label[0], y: r.label[1],
+    w: Math.max(r.name.length * size, wide ? `${r.area} m²`.length * 6.5 : 0) * 0.6 + 4,
+  }));
+  for (let pass = 0; pass < 5; pass++) {
+    let moved = false;
+    for (const [i, a] of spots.entries()) {
+      for (const b of spots.slice(i + 1)) {
+        const ox = (a.w + b.w) / 2 - Math.abs(a.x - b.x);
+        const oy = height - Math.abs(a.y - b.y);
+        if (ox <= 0 || oy <= 0) continue;
+        moved = true;
+        if (ox < oy) {
+          const s = (a.x <= b.x ? -ox : ox) / 2;
+          a.x += s;
+          b.x -= s;
+        } else if (a.y <= b.y) {
+          // only the lower one goes down: the map buttons cover the top of the map
+          b.y += oy;
+        } else {
+          a.y += oy;
+        }
+      }
+    }
+    if (!moved) break;
+  }
+  return Object.fromEntries(spots.map((s) => [s.id, [s.x, s.y]]));
+}
+
 // the card picker and setConfig run before the card gets hass
 const pageLang = () => langOf(document.querySelector("home-assistant")?.hass);
 
@@ -1185,9 +1220,10 @@ class LefantVacuumCard extends HTMLElement {
       const color = ROOM_COLORS[r.id % ROOM_COLORS.length];
       return `<path class="room ${order >= 0 ? "selected" : ""} ${step[r.id]?.state || ""}" data-action="room" data-value="${r.id}" d="${r.path}" style="--room:${color}"><title>${esc(r.name)}</title></path>`;
     }).join("");
+    const spots = placeLabels(rooms.filter((r) => r.label), this._wide);
     const labels = rooms.filter((r) => r.label).map((r) => {
       const order = ed ? -1 : this._selected.indexOf(r.id);
-      const [x, y] = r.label;
+      const [x, y] = spots[r.id];
       const s = step[r.id];
       const badge = order >= 0
         ? `<circle cx="${x}" cy="${y - 13}" r="6.5" class="badge"/><text x="${x}" y="${y - 10.6}" class="badge-text">${order + 1}</text>`
