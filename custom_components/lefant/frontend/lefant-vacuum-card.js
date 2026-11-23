@@ -651,8 +651,8 @@ const CLEANING = new Set(["smart", "zone_clean", "part_clean", "cleaning", "goto
 const PAUSED = new Set(["paused", "recharing_paused", "fastmaping_paused", "wash_paused", "relocating_pause"]);
 const RETURNING = new Set(["goto_charge", "relocating_recharge"]);
 const HELD = new Set(["sleep", "standby"]);
-// DP 164 code the dock sends with the dust bag alert, shown by the dust bag row
-const BAG_ALARM = 16;
+// DP 164 codes the dock sends with its alerts (16 dust bag, 31 clean water, 32 dirty water), shown by the dock rows
+const BASE_ALARMS = new Set([16, 31, 32]);
 
 const MAP_REFRESH_MS = 10 * 60 * 1000;
 
@@ -1158,7 +1158,7 @@ class LefantVacuumCard extends HTMLElement {
     if (baseAlerts.length) chips.push(`<span class="chip warn" data-action="unfold" data-value="base"><ha-icon icon="mdi:home-alert-outline"></ha-icon>${this._t("dock_alert", { alerts: esc(baseAlerts.join(", ")) })}</span>`);
     // codes without a known meaning: shown as they come
     const alarm = Number(this._state("alarm_code")?.state);
-    if (alarm && alarm !== BAG_ALARM) {
+    if (alarm && !BASE_ALARMS.has(alarm)) {
       chips.push(`<span class="chip warn" data-action="more" data-value="alarm_code"><ha-icon icon="mdi:alert-outline"></ha-icon>${this._t("robot_alarm", { code: alarm })}</span>`);
     }
     if (error && error.state !== "none" && error.state !== "unavailable" && error.state !== "unknown") {

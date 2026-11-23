@@ -56,7 +56,9 @@ WATER_LEVELS = ["closed", "low", "middle", "high"]
 # DP 114 bits, from the product model; the higher bits are not documented
 FAULTS = ["side_brush", "main_brush", "left_wheel", "right_wheel", "dust_bin", "cliff_sensor", "bumper"]
 # DP 158 data bytes, 1 = alert: found on 2026-10-28 by taking each part out of the base.
-# Bytes 2, 4 and 5 never changed; removing the detergent container changed nothing.
+# Bytes 2 and 4 never changed; removing the detergent container changed nothing. Byte 5 is 1 for about
+# 15 minutes after the robot ends a cleaning on the base (meaning unknown). DP 164 comes with each alert:
+# 31 clean water, 32 dirty water, 16 dust bag.
 BASE_FLAGS = {"clean_water": 0, "dirty_water": 1, "dust_bag": 3}
 # parts counted by HA: the robot does not report their wear
 WEAR_PARTS = ("main_brush", "side_brush", "filter", "mop")
